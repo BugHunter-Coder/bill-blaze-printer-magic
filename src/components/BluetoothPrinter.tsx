@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,7 +5,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Bluetooth, Printer, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react';
-import { CartItem } from '@/types/pos';
+import { CartItem, ShopDetails } from '@/types/pos';
 import { useToast } from '@/hooks/use-toast';
 
 interface BluetoothPrinterProps {
@@ -16,6 +15,7 @@ interface BluetoothPrinterProps {
   cart: CartItem[];
   total: number;
   onOrderComplete: () => void;
+  shopDetails: ShopDetails;
 }
 
 export const BluetoothPrinter = ({
@@ -25,6 +25,7 @@ export const BluetoothPrinter = ({
   cart,
   total,
   onOrderComplete,
+  shopDetails,
 }: BluetoothPrinterProps) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -93,7 +94,7 @@ export const BluetoothPrinter = ({
   };
 
   const generateReceiptData = () => {
-    const tax = total * 0.08;
+    const tax = total * shopDetails.taxRate;
     const finalTotal = total + tax;
     const timestamp = new Date();
     
@@ -104,6 +105,7 @@ export const BluetoothPrinter = ({
       tax: tax,
       total: finalTotal,
       orderNumber: Math.floor(Math.random() * 10000),
+      shopDetails,
     };
   };
 
@@ -121,8 +123,14 @@ export const BluetoothPrinter = ({
     
     // Store header
     commands += ESC + '!' + '\x18'; // Double height and width
-    commands += 'Bill Blaze POS\n';
+    commands += `${receiptData.shopDetails.name}\n`;
     commands += ESC + '!' + '\x00'; // Normal size
+    commands += `${receiptData.shopDetails.address}\n`;
+    commands += `Phone: ${receiptData.shopDetails.phone}\n`;
+    commands += `Email: ${receiptData.shopDetails.email}\n`;
+    if (receiptData.shopDetails.taxId) {
+      commands += `Tax ID: ${receiptData.shopDetails.taxId}\n`;
+    }
     commands += '================================\n';
     
     // Order details
@@ -134,17 +142,17 @@ export const BluetoothPrinter = ({
     // Items
     receiptData.items.forEach((item: CartItem) => {
       commands += `${item.name}\n`;
-      commands += `  ${item.quantity} x $${item.price.toFixed(2)} = $${(item.quantity * item.price).toFixed(2)}\n`;
+      commands += `  ${item.quantity} x ${receiptData.shopDetails.currency}${item.price.toFixed(2)} = ${receiptData.shopDetails.currency}${(item.quantity * item.price).toFixed(2)}\n`;
     });
     
     commands += '================================\n';
     
     // Totals
     commands += ESC + 'a' + '\x02'; // Right align
-    commands += `Subtotal: $${receiptData.subtotal.toFixed(2)}\n`;
-    commands += `Tax (8%): $${receiptData.tax.toFixed(2)}\n`;
+    commands += `Subtotal: ${receiptData.shopDetails.currency}${receiptData.subtotal.toFixed(2)}\n`;
+    commands += `Tax (${(receiptData.shopDetails.taxRate * 100).toFixed(1)}%): ${receiptData.shopDetails.currency}${receiptData.tax.toFixed(2)}\n`;
     commands += ESC + '!' + '\x08'; // Emphasized
-    commands += `TOTAL: $${receiptData.total.toFixed(2)}\n`;
+    commands += `TOTAL: ${receiptData.shopDetails.currency}${receiptData.total.toFixed(2)}\n`;
     commands += ESC + '!' + '\x00'; // Normal
     
     // Footer
@@ -209,7 +217,13 @@ export const BluetoothPrinter = ({
     return (
       <div className="max-w-sm mx-auto bg-white p-4 font-mono text-sm">
         <div className="text-center border-b-2 border-dashed pb-2 mb-2">
-          <h2 className="font-bold text-lg">Bill Blaze POS</h2>
+          <h2 className="font-bold text-lg">{receiptData.shopDetails.name}</h2>
+          <p className="text-xs">{receiptData.shopDetails.address}</p>
+          <p className="text-xs">Phone: {receiptData.shopDetails.phone}</p>
+          <p className="text-xs">Email: {receiptData.shopDetails.email}</p>
+          {receiptData.shopDetails.taxId && (
+            <p className="text-xs">Tax ID: {receiptData.shopDetails.taxId}</p>
+          )}
           <p className="text-xs">================================</p>
         </div>
         
@@ -224,7 +238,7 @@ export const BluetoothPrinter = ({
             <div key={index} className="mb-1">
               <p className="font-medium">{item.name}</p>
               <p className="text-xs">
-                {item.quantity} x ${item.price.toFixed(2)} = ${(item.quantity * item.price).toFixed(2)}
+                {item.quantity} x {receiptData.shopDetails.currency}{item.price.toFixed(2)} = {receiptData.shopDetails.currency}{(item.quantity * item.price).toFixed(2)}
               </p>
             </div>
           ))}
@@ -232,9 +246,9 @@ export const BluetoothPrinter = ({
         </div>
         
         <div className="text-right mb-2">
-          <p>Subtotal: ${receiptData.subtotal.toFixed(2)}</p>
-          <p>Tax (8%): ${receiptData.tax.toFixed(2)}</p>
-          <p className="font-bold text-lg">TOTAL: ${receiptData.total.toFixed(2)}</p>
+          <p>Subtotal: {receiptData.shopDetails.currency}{receiptData.subtotal.toFixed(2)}</p>
+          <p>Tax ({(receiptData.shopDetails.taxRate * 100).toFixed(1)}%): {receiptData.shopDetails.currency}{receiptData.tax.toFixed(2)}</p>
+          <p className="font-bold text-lg">TOTAL: {receiptData.shopDetails.currency}{receiptData.total.toFixed(2)}</p>
         </div>
         
         <div className="text-center border-t-2 border-dashed pt-2">

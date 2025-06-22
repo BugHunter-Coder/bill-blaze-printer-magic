@@ -1,22 +1,25 @@
 
 import { Wifi, WifiOff, Printer } from 'lucide-react';
+import { ShopDetails } from '@/types/pos';
 
 interface HeaderProps {
   isBluetoothConnected: boolean;
   printer: BluetoothDevice | null;
+  shopDetails: ShopDetails;
 }
 
-export const Header = ({ isBluetoothConnected, printer }: HeaderProps) => {
+export const Header = ({ isBluetoothConnected, printer, shopDetails }: HeaderProps) => {
   return (
-    <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-6">
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2">
-          <Printer className="h-8 w-8 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Bill Blaze POS</h1>
+    <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2">
+        <Printer className="h-8 w-8 text-blue-600" />
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{shopDetails.name}</h1>
+          <p className="text-xs text-gray-500">{shopDetails.address}</p>
         </div>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-4 ml-auto">
         <div className="flex items-center space-x-2">
           {isBluetoothConnected ? (
             <Wifi className="h-5 w-5 text-green-500" />
@@ -31,6 +34,6 @@ export const Header = ({ isBluetoothConnected, printer }: HeaderProps) => {
           </span>
         </div>
       </div>
-    </header>
+    </div>
   );
 };
