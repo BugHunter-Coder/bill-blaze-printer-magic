@@ -1,41 +1,99 @@
 
 import { useState, useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { ProductCatalog } from '@/components/ProductCatalog';
 import { Cart } from '@/components/Cart';
 import { BluetoothPrinter } from '@/components/BluetoothPrinter';
 import { Header } from '@/components/Header';
 import { ShopManagement } from '@/components/ShopManagement';
+import { ShopSetup } from '@/components/ShopSetup';
 import { Button } from '@/components/ui/button';
-import { Product, CartItem, ShopDetails, Expense, Transaction } from '@/types/pos';
+import { Product, CartItem, Shop, Expense, Transaction } from '@/types/pos';
 import { Store, ShoppingCart } from 'lucide-react';
 
 const Index = () => {
+  const { user, profile, loading } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
   const [printer, setPrinter] = useState<BluetoothDevice | null>(null);
   const [currentView, setCurrentView] = useState<'pos' | 'management'>('pos');
-  const [shopDetails, setShopDetails] = useState<ShopDetails>({
-    name: 'Bill Blaze POS',
-    address: '123 Main Street, City, State 12345',
-    phone: '+1 (555) 123-4567',
-    email: 'info@billblaze.com',
-    taxId: 'TAX123456789',
-    currency: 'USD',
-    taxRate: 0.08,
-  });
+  const [shop, setShop] = useState<Shop | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [shopLoading, setShopLoading] = useState(true);
 
   useEffect(() => {
-    const savedShopDetails = localStorage.getItem('shopDetails');
-    if (savedShopDetails) {
-      setShopDetails(JSON.parse(savedShopDetails));
+    if (profile?.shop_id) {
+      fetchShopDetails();
+      fetchTransactions();
+    } else {
+      setShopLoading(false);
     }
+  }, [profile]);
 
-    const savedTransactions = localStorage.getItem('transactions');
-    if (savedTransactions) {
-      setTransactions(JSON.parse(savedTransactions));
+  const fetchShopDetails = async () => {
+    if (!profile?.shop_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('shops')
+        .select('*')
+        .eq('id', profile.shop_id)
+        .single();
+      
+      if (error) throw error;
+      setShop(data);
+    } catch (error) {
+      console.error('Error fetching shop details:', error);
+    } finally {
+      setShopLoading(false);
     }
-  }, []);
+  };
+
+  const fetchTransactions = async () => {
+    if (!profile?.shop_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('shop_id', profile.shop_id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+    }
+  };
+
+  if (loading || shopLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (!profile?.shop_id) {
+    return <ShopSetup onShopCreated={fetchShopDetails} />;
+  }
+
+  if (!shop) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Shop not found</h2>
+          <p className="text-gray-600">Please contact support for assistance.</p>
+        </div>
+      </div>
+    );
+  }
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -75,44 +133,75 @@ const Index = () => {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
-  const handleOrderComplete = () => {
-    const total = getCartTotal();
-    const tax = total * shopDetails.taxRate;
-    const finalTotal = total + tax;
-
-    const transaction: Transaction = {
-      id: Date.now().toString(),
-      type: 'sale',
-      amount: finalTotal,
-      date: new Date(),
-      description: `Sale - ${cart.length} items`,
-      items: cart,
-    };
-
-    const updatedTransactions = [...transactions, transaction];
-    setTransactions(updatedTransactions);
-    localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
+  const handleOrderComplete = async (paymentMethod: string, directAmount?: number) => {
+    if (!profile?.shop_id) return;
     
-    clearCart();
+    try {
+      const total = directAmount || getCartTotal();
+      const tax = total * shop.tax_rate;
+      const finalTotal = total + tax;
+
+      // Create transaction
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          shop_id: profile.shop_id,
+          cashier_id: profile.id,
+          type: 'sale',
+          subtotal: total,
+          tax_amount: tax,
+          total_amount: finalTotal,
+          payment_method: paymentMethod,
+          is_direct_billing: !!directAmount,
+          invoice_number: `INV-${Date.now()}`,
+        })
+        .select()
+        .single();
+
+      if (transactionError) throw transactionError;
+
+      // Create transaction items if not direct billing
+      if (!directAmount && cart.length > 0) {
+        const items = cart.map(item => ({
+          transaction_id: transaction.id,
+          product_id: item.id,
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.price * item.quantity,
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('transaction_items')
+          .insert(items);
+
+        if (itemsError) throw itemsError;
+      }
+
+      await fetchTransactions();
+      clearCart();
+    } catch (error) {
+      console.error('Error completing order:', error);
+    }
   };
 
-  const handleShopDetailsUpdate = (details: ShopDetails) => {
-    setShopDetails(details);
-  };
+  const handleAddExpense = async (expense: Expense) => {
+    if (!profile?.shop_id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .insert({
+          ...expense,
+          shop_id: profile.shop_id,
+          created_by: profile.id,
+        });
 
-  const handleAddExpense = (expense: Expense) => {
-    const transaction: Transaction = {
-      id: expense.id,
-      type: 'expense',
-      amount: expense.amount,
-      date: expense.date,
-      description: expense.description,
-      category: expense.category,
-    };
-
-    const updatedTransactions = [...transactions, transaction];
-    setTransactions(updatedTransactions);
-    localStorage.setItem('transactions', JSON.stringify(updatedTransactions));
+      if (error) throw error;
+      await fetchTransactions();
+    } catch (error) {
+      console.error('Error adding expense:', error);
+    }
   };
 
   if (currentView === 'management') {
@@ -121,7 +210,7 @@ const Index = () => {
         <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-6">
           <div className="flex items-center space-x-4">
             <Store className="h-8 w-8 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">{shopDetails.name}</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{shop.name}</h1>
           </div>
           <Button onClick={() => setCurrentView('pos')} variant="outline">
             <ShoppingCart className="h-4 w-4 mr-2" />
@@ -130,7 +219,8 @@ const Index = () => {
         </header>
         
         <ShopManagement 
-          onShopDetailsUpdate={handleShopDetailsUpdate}
+          shop={shop}
+          onShopUpdate={fetchShopDetails}
           transactions={transactions}
           onAddExpense={handleAddExpense}
         />
@@ -144,7 +234,7 @@ const Index = () => {
         <Header 
           isBluetoothConnected={isBluetoothConnected}
           printer={printer}
-          shopDetails={shopDetails}
+          shop={shop}
         />
         <Button onClick={() => setCurrentView('management')} variant="outline">
           <Store className="h-4 w-4 mr-2" />
@@ -153,12 +243,10 @@ const Index = () => {
       </header>
       
       <div className="flex h-[calc(100vh-4rem)]">
-        {/* Product Catalog - Left Side */}
         <div className="flex-1 p-6 overflow-y-auto">
           <ProductCatalog onAddToCart={addToCart} />
         </div>
 
-        {/* Cart and Printer - Right Side */}
         <div className="w-96 bg-white shadow-lg border-l border-gray-200 flex flex-col">
           <Cart
             items={cart}
@@ -166,7 +254,7 @@ const Index = () => {
             onRemoveItem={removeFromCart}
             onClearCart={clearCart}
             total={getCartTotal()}
-            shopDetails={shopDetails}
+            shop={shop}
           />
           
           <BluetoothPrinter
@@ -176,7 +264,7 @@ const Index = () => {
             cart={cart}
             total={getCartTotal()}
             onOrderComplete={handleOrderComplete}
-            shopDetails={shopDetails}
+            shop={shop}
           />
         </div>
       </div>

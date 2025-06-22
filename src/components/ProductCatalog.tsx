@@ -1,134 +1,142 @@
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Coffee, Utensils, Cookie, Soup } from 'lucide-react';
-import { Product, Category } from '@/types/pos';
-
-const categories: Category[] = [
-  { id: 'all', name: 'All', icon: 'Grid' },
-  { id: 'beverages', name: 'Beverages', icon: 'Coffee' },
-  { id: 'food', name: 'Food', icon: 'Utensils' },
-  { id: 'snacks', name: 'Snacks', icon: 'Cookie' },
-  { id: 'soups', name: 'Soups', icon: 'Soup' },
-];
-
-const products: Product[] = [
-  { id: '1', name: 'Espresso', price: 3.50, category: 'beverages', inStock: true },
-  { id: '2', name: 'Cappuccino', price: 4.25, category: 'beverages', inStock: true },
-  { id: '3', name: 'Latte', price: 4.75, category: 'beverages', inStock: true },
-  { id: '4', name: 'Americano', price: 3.25, category: 'beverages', inStock: true },
-  { id: '5', name: 'Croissant', price: 2.95, category: 'food', inStock: true },
-  { id: '6', name: 'Bagel with Cream Cheese', price: 3.75, category: 'food', inStock: true },
-  { id: '7', name: 'Avocado Toast', price: 7.95, category: 'food', inStock: true },
-  { id: '8', name: 'Blueberry Muffin', price: 2.50, category: 'snacks', inStock: true },
-  { id: '9', name: 'Chocolate Chip Cookie', price: 1.95, category: 'snacks', inStock: true },
-  { id: '10', name: 'Tomato Soup', price: 5.95, category: 'soups', inStock: true },
-  { id: '11', name: 'Chicken Noodle Soup', price: 6.95, category: 'soups', inStock: true },
-  { id: '12', name: 'Green Tea', price: 2.75, category: 'beverages', inStock: true },
-];
+import { Plus, Search, Package } from 'lucide-react';
+import { DatabaseProduct, Product } from '@/types/pos';
 
 interface ProductCatalogProps {
   onAddToCart: (product: Product) => void;
 }
 
 export const ProductCatalog = ({ onAddToCart }: ProductCatalogProps) => {
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const { profile } = useAuth();
+  const [products, setProducts] = useState<DatabaseProduct[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  const filteredProducts = selectedCategory === 'all' 
-    ? products 
-    : products.filter(product => product.category === selectedCategory);
+  useEffect(() => {
+    if (profile?.shop_id) {
+      fetchProducts();
+    }
+  }, [profile]);
 
-  const getCategoryIcon = (iconName: string) => {
-    const icons = {
-      Coffee: Coffee,
-      Utensils: Utensils,
-      Cookie: Cookie,
-      Soup: Soup,
-    };
-    const IconComponent = icons[iconName as keyof typeof icons] || Coffee;
-    return <IconComponent className="h-5 w-5" />;
+  const fetchProducts = async () => {
+    if (!profile?.shop_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('shop_id', profile.shop_id)
+        .eq('is_active', true)
+        .order('name');
+      
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const convertToProduct = (dbProduct: DatabaseProduct): Product => ({
+    id: dbProduct.id,
+    name: dbProduct.name,
+    price: dbProduct.price,
+    category: 'General', // You can join with categories table later
+    image: dbProduct.image_url,
+    description: dbProduct.description,
+    inStock: dbProduct.stock_quantity > 0,
+    stock_quantity: dbProduct.stock_quantity,
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
+    <div>
+      <div className="mb-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Products</h2>
         
-        {/* Category Filter */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {categories.map((category) => (
-            <Button
-              key={category.id}
-              variant={selectedCategory === category.id ? "default" : "outline"}
-              onClick={() => setSelectedCategory(category.id)}
-              className="flex items-center space-x-2"
-              size="sm"
-            >
-              {category.id !== 'all' && getCategoryIcon(category.icon)}
-              <span>{category.name}</span>
-            </Button>
-          ))}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
         </div>
       </div>
 
-      {/* Product Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredProducts.map((product) => (
-          <Card 
-            key={product.id} 
-            className="hover:shadow-lg transition-shadow duration-200 cursor-pointer group"
-          >
-            <CardContent className="p-4">
-              <div className="aspect-square bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg mb-3 flex items-center justify-center">
-                <div className="text-4xl">
-                  {product.category === 'beverages' && '☕'}
-                  {product.category === 'food' && '🥪'}
-                  {product.category === 'snacks' && '🍪'}
-                  {product.category === 'soups' && '🍲'}
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <h3 className="font-semibold text-gray-900 line-clamp-2">
-                  {product.name}
-                </h3>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-blue-600">
-                    ${product.price.toFixed(2)}
-                  </span>
-                  
-                  {product.inStock ? (
-                    <Badge variant="secondary" className="text-green-600 bg-green-50">
-                      In Stock
-                    </Badge>
+      {filteredProducts.length === 0 ? (
+        <div className="text-center py-12">
+          <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
+          <p className="text-gray-600">
+            {searchTerm ? 'Try adjusting your search terms.' : 'Add products to get started.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredProducts.map((product) => (
+            <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+              <CardContent className="p-4">
+                <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center">
+                  {product.image_url ? (
+                    <img
+                      src={product.image_url}
+                      alt={product.name}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
                   ) : (
-                    <Badge variant="secondary" className="text-red-600 bg-red-50">
-                      Out of Stock
-                    </Badge>
+                    <Package className="h-12 w-12 text-gray-400" />
                   )}
                 </div>
                 
-                <Button 
-                  onClick={() => onAddToCart(product)}
-                  disabled={!product.inStock}
-                  className="w-full group-hover:bg-blue-600 transition-colors"
+                <h3 className="font-semibold text-gray-900 mb-1 truncate">{product.name}</h3>
+                
+                {product.description && (
+                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
+                )}
+                
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-lg font-bold text-blue-600">
+                    ${product.price.toFixed(2)}
+                  </span>
+                  <Badge variant={product.stock_quantity > 0 ? "default" : "destructive"}>
+                    Stock: {product.stock_quantity}
+                  </Badge>
+                </div>
+                
+                <Button
+                  onClick={() => onAddToCart(convertToProduct(product))}
+                  className="w-full"
                   size="sm"
+                  disabled={product.stock_quantity === 0}
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Add to Cart
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredProducts.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No products found in this category.</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </div>
