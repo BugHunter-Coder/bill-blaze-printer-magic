@@ -128,8 +128,9 @@ export interface DailyReport {
   totalSales: number;
   totalTransactions: number;
   totalExpenses: number;
-  netProfit: number;
-  topProducts: Array<{
+  totalProfit: number;
+  transactionCount: number;
+  topSellingItems: Array<{
     name: string;
     quantity: number;
     revenue: number;

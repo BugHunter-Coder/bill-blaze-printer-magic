@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,7 @@ interface BluetoothPrinterProps {
   onPrinterChange: (printer: BluetoothDevice | null) => void;
   cart: CartItem[];
   total: number;
-  onOrderComplete: () => void;
+  onOrderComplete: (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => void;
   shopDetails: ShopDetails;
 }
 
@@ -94,7 +95,7 @@ export const BluetoothPrinter = ({
   };
 
   const generateReceiptData = () => {
-    const tax = total * shopDetails.taxRate;
+    const tax = total * shopDetails.tax_rate;
     const finalTotal = total + tax;
     const timestamp = new Date();
     
@@ -128,8 +129,8 @@ export const BluetoothPrinter = ({
     commands += `${receiptData.shopDetails.address}\n`;
     commands += `Phone: ${receiptData.shopDetails.phone}\n`;
     commands += `Email: ${receiptData.shopDetails.email}\n`;
-    if (receiptData.shopDetails.taxId) {
-      commands += `Tax ID: ${receiptData.shopDetails.taxId}\n`;
+    if (receiptData.shopDetails.tax_id) {
+      commands += `Tax ID: ${receiptData.shopDetails.tax_id}\n`;
     }
     commands += '================================\n';
     
@@ -150,7 +151,7 @@ export const BluetoothPrinter = ({
     // Totals
     commands += ESC + 'a' + '\x02'; // Right align
     commands += `Subtotal: ${receiptData.shopDetails.currency}${receiptData.subtotal.toFixed(2)}\n`;
-    commands += `Tax (${(receiptData.shopDetails.taxRate * 100).toFixed(1)}%): ${receiptData.shopDetails.currency}${receiptData.tax.toFixed(2)}\n`;
+    commands += `Tax (${(receiptData.shopDetails.tax_rate * 100).toFixed(1)}%): ${receiptData.shopDetails.currency}${receiptData.tax.toFixed(2)}\n`;
     commands += ESC + '!' + '\x08'; // Emphasized
     commands += `TOTAL: ${receiptData.shopDetails.currency}${receiptData.total.toFixed(2)}\n`;
     commands += ESC + '!' + '\x00'; // Normal
@@ -198,7 +199,7 @@ export const BluetoothPrinter = ({
         description: "Order completed successfully!",
       });
       
-      onOrderComplete();
+      onOrderComplete('cash');
     } catch (error) {
       console.error('Printing error:', error);
       toast({
@@ -221,8 +222,8 @@ export const BluetoothPrinter = ({
           <p className="text-xs">{receiptData.shopDetails.address}</p>
           <p className="text-xs">Phone: {receiptData.shopDetails.phone}</p>
           <p className="text-xs">Email: {receiptData.shopDetails.email}</p>
-          {receiptData.shopDetails.taxId && (
-            <p className="text-xs">Tax ID: {receiptData.shopDetails.taxId}</p>
+          {receiptData.shopDetails.tax_id && (
+            <p className="text-xs">Tax ID: {receiptData.shopDetails.tax_id}</p>
           )}
           <p className="text-xs">================================</p>
         </div>
@@ -247,7 +248,7 @@ export const BluetoothPrinter = ({
         
         <div className="text-right mb-2">
           <p>Subtotal: {receiptData.shopDetails.currency}{receiptData.subtotal.toFixed(2)}</p>
-          <p>Tax ({(receiptData.shopDetails.taxRate * 100).toFixed(1)}%): {receiptData.shopDetails.currency}{receiptData.tax.toFixed(2)}</p>
+          <p>Tax ({(receiptData.shopDetails.tax_rate * 100).toFixed(1)}%): {receiptData.shopDetails.currency}{receiptData.tax.toFixed(2)}</p>
           <p className="font-bold text-lg">TOTAL: {receiptData.shopDetails.currency}{receiptData.total.toFixed(2)}</p>
         </div>
         

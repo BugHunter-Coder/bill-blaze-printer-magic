@@ -1,3 +1,4 @@
+
 import { ShoppingCart, Trash2, Plus, Minus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +14,7 @@ interface CartProps {
 }
 
 export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails }: CartProps) => {
-  const tax = total * shopDetails.taxRate;
+  const tax = total * shopDetails.tax_rate;
   const finalTotal = total + tax;
 
   return (
@@ -95,7 +96,7 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
                 <span>{shopDetails.currency}{total.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span>Tax ({(shopDetails.taxRate * 100).toFixed(1)}%)</span>
+                <span>Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%)</span>
                 <span>{shopDetails.currency}{tax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-lg font-bold border-t pt-2">

@@ -4,36 +4,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Store, Save, Plus, Calendar, TrendingUp, TrendingDown } from 'lucide-react';
-import { ShopDetails, Expense, Transaction } from '@/types/pos';
-import { ExpenseTracker } from './ExpenseTracker';
-import { SalesReport } from './SalesReport';
+import { Store, Save, TrendingUp, TrendingDown } from 'lucide-react';
+import { Shop, Expense, Transaction } from '@/types/pos';
 
 interface ShopManagementProps {
-  onShopDetailsUpdate: (details: ShopDetails) => void;
+  shopDetails: Shop;
+  onShopUpdate: () => Promise<void>;
   transactions: Transaction[];
-  onAddExpense: (expense: Expense) => void;
+  onAddExpense: (expense: Expense) => Promise<void>;
 }
 
-export const ShopManagement = ({ onShopDetailsUpdate, transactions, onAddExpense }: ShopManagementProps) => {
-  const [shopDetails, setShopDetails] = useState<ShopDetails>({
-    name: 'Bill Blaze POS',
-    address: '123 Main Street, City, State 12345',
-    phone: '+1 (555) 123-4567',
-    email: 'info@billblaze.com',
-    taxId: 'TAX123456789',
-    currency: 'USD',
-    taxRate: 0.08,
-  });
-
+export const ShopManagement = ({ shopDetails, onShopUpdate, transactions, onAddExpense }: ShopManagementProps) => {
+  const [shopData, setShopData] = useState<Shop>(shopDetails);
   const { toast } = useToast();
 
   const handleSaveShopDetails = () => {
-    onShopDetailsUpdate(shopDetails);
-    localStorage.setItem('shopDetails', JSON.stringify(shopDetails));
+    onShopUpdate();
     toast({
       title: "Shop details saved",
       description: "Your shop information has been updated successfully.",
@@ -41,23 +30,20 @@ export const ShopManagement = ({ onShopDetailsUpdate, transactions, onAddExpense
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem('shopDetails');
-    if (saved) {
-      setShopDetails(JSON.parse(saved));
-    }
-  }, []);
+    setShopData(shopDetails);
+  }, [shopDetails]);
 
   const todayTransactions = transactions.filter(t => 
-    new Date(t.date).toDateString() === new Date().toDateString()
+    new Date(t.created_at).toDateString() === new Date().toDateString()
   );
 
   const todaySales = todayTransactions
     .filter(t => t.type === 'sale')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + t.total_amount, 0);
 
   const todayExpenses = todayTransactions
     .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + t.total_amount, 0);
 
   const todayProfit = todaySales - todayExpenses;
 
@@ -111,96 +97,78 @@ export const ShopManagement = ({ onShopDetailsUpdate, transactions, onAddExpense
         </Card>
       </div>
 
-      <Tabs defaultValue="shop-details" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="shop-details">Shop Details</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="shop-details">
-          <Card>
-            <CardHeader>
-              <CardTitle>Shop Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="shopName">Shop Name</Label>
-                  <Input
-                    id="shopName"
-                    value={shopDetails.name}
-                    onChange={(e) => setShopDetails({ ...shopDetails, name: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    value={shopDetails.phone}
-                    onChange={(e) => setShopDetails({ ...shopDetails, phone: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={shopDetails.email}
-                    onChange={(e) => setShopDetails({ ...shopDetails, email: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="taxId">Tax ID</Label>
-                  <Input
-                    id="taxId"
-                    value={shopDetails.taxId}
-                    onChange={(e) => setShopDetails({ ...shopDetails, taxId: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="currency">Currency</Label>
-                  <Input
-                    id="currency"
-                    value={shopDetails.currency}
-                    onChange={(e) => setShopDetails({ ...shopDetails, currency: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="taxRate">Tax Rate (%)</Label>
-                  <Input
-                    id="taxRate"
-                    type="number"
-                    step="0.01"
-                    value={shopDetails.taxRate * 100}
-                    onChange={(e) => setShopDetails({ ...shopDetails, taxRate: parseFloat(e.target.value) / 100 })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="address">Address</Label>
-                <Input
-                  id="address"
-                  value={shopDetails.address}
-                  onChange={(e) => setShopDetails({ ...shopDetails, address: e.target.value })}
-                />
-              </div>
-              <Button onClick={handleSaveShopDetails} className="w-full md:w-auto">
-                <Save className="h-4 w-4 mr-2" />
-                Save Shop Details
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="expenses">
-          <ExpenseTracker onAddExpense={onAddExpense} transactions={transactions} />
-        </TabsContent>
-
-        <TabsContent value="reports">
-          <SalesReport transactions={transactions} />
-        </TabsContent>
-      </Tabs>
+      <Card>
+        <CardHeader>
+          <CardTitle>Shop Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="shopName">Shop Name</Label>
+              <Input
+                id="shopName"
+                value={shopData.name}
+                onChange={(e) => setShopData({ ...shopData, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                value={shopData.phone || ''}
+                onChange={(e) => setShopData({ ...shopData, phone: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={shopData.email || ''}
+                onChange={(e) => setShopData({ ...shopData, email: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="taxId">Tax ID</Label>
+              <Input
+                id="taxId"
+                value={shopData.tax_id || ''}
+                onChange={(e) => setShopData({ ...shopData, tax_id: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="currency">Currency</Label>
+              <Input
+                id="currency"
+                value={shopData.currency}
+                onChange={(e) => setShopData({ ...shopData, currency: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="taxRate">Tax Rate (%)}</Label>
+              <Input
+                id="taxRate"
+                type="number"
+                step="0.01"
+                value={shopData.tax_rate * 100}
+                onChange={(e) => setShopData({ ...shopData, tax_rate: parseFloat(e.target.value) / 100 })}
+              />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="address">Address</Label>
+            <Input
+              id="address"
+              value={shopData.address || ''}
+              onChange={(e) => setShopData({ ...shopData, address: e.target.value })}
+            />
+          </div>
+          <Button onClick={handleSaveShopDetails} className="w-full md:w-auto">
+            <Save className="h-4 w-4 mr-2" />
+            Save Shop Details
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 };
