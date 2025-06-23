@@ -145,7 +145,7 @@ export const ShopManagement = ({ shopDetails, onShopUpdate, transactions, onAddE
               />
             </div>
             <div>
-              <Label htmlFor="taxRate">Tax Rate (%)}</Label>
+              <Label htmlFor="taxRate">Tax Rate (%)</Label>
               <Input
                 id="taxRate"
                 type="number"

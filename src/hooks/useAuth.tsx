@@ -81,7 +81,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+    // Use the current origin, which will be the Lovable project URL in production
+    const redirectUrl = window.location.origin + '/';
     
     const { error } = await supabase.auth.signUp({
       email,
