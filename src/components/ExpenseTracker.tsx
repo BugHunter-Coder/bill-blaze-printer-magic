@@ -44,10 +44,14 @@ export const ExpenseTracker = ({ onAddExpense, transactions }: ExpenseTrackerPro
 
     const expense: Expense = {
       id: Date.now().toString(),
+      shop_id: '',
       description,
       amount: parseFloat(amount),
       category,
-      date: new Date(),
+      payment_method: 'cash',
+      expense_date: new Date().toISOString().split('T')[0],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     };
 
     onAddExpense(expense);
@@ -62,22 +66,22 @@ export const ExpenseTracker = ({ onAddExpense, transactions }: ExpenseTrackerPro
   };
 
   const todayExpenses = transactions
-    .filter(t => t.type === 'expense' && new Date(t.date).toDateString() === new Date().toDateString())
-    .reduce((sum, t) => sum + t.amount, 0);
+    .filter(t => t.type === 'expense' && new Date(t.created_at).toDateString() === new Date().toDateString())
+    .reduce((sum, t) => sum + t.total_amount, 0);
 
   const monthlyExpenses = transactions
     .filter(t => {
-      const transactionDate = new Date(t.date);
+      const transactionDate = new Date(t.created_at);
       const now = new Date();
       return t.type === 'expense' && 
         transactionDate.getMonth() === now.getMonth() && 
         transactionDate.getFullYear() === now.getFullYear();
     })
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((sum, t) => sum + t.total_amount, 0);
 
   const recentExpenses = transactions
     .filter(t => t.type === 'expense')
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 10);
 
   return (
@@ -173,13 +177,13 @@ export const ExpenseTracker = ({ onAddExpense, transactions }: ExpenseTrackerPro
               recentExpenses.map((expense) => (
                 <div key={expense.id} className="flex justify-between items-center p-3 border rounded-lg">
                   <div>
-                    <p className="font-medium">{expense.description}</p>
+                    <p className="font-medium">{expense.notes || 'Expense'}</p>
                     <p className="text-sm text-gray-600">
-                      {new Date(expense.date).toLocaleDateString()} • {expense.category}
+                      {new Date(expense.created_at).toLocaleDateString()} • General
                     </p>
                   </div>
                   <Badge variant="destructive">
-                    -${expense.amount.toFixed(2)}
+                    -${expense.total_amount.toFixed(2)}
                   </Badge>
                 </div>
               ))
