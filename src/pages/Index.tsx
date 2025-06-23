@@ -8,7 +8,7 @@ import { Cart } from '@/components/Cart';
 import { BluetoothPrinter } from '@/components/BluetoothPrinter';
 import { Header } from '@/components/Header';
 import { ShopManagement } from '@/components/ShopManagement';
-import { ShopSetup } from '@/components/ShopSetup';
+import ShopSetup from '@/components/ShopSetup';
 import { Button } from '@/components/ui/button';
 import { Product, CartItem, Shop, Expense, Transaction } from '@/types/pos';
 import { Store, ShoppingCart } from 'lucide-react';
@@ -133,7 +133,7 @@ const Index = () => {
     return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
-  const handleOrderComplete = async (paymentMethod: string, directAmount?: number) => {
+  const handleOrderComplete = async (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => {
     if (!profile?.shop_id) return;
     
     try {
@@ -147,7 +147,7 @@ const Index = () => {
         .insert({
           shop_id: profile.shop_id,
           cashier_id: profile.id,
-          type: 'sale',
+          type: 'sale' as const,
           subtotal: total,
           tax_amount: tax,
           total_amount: finalTotal,
@@ -219,7 +219,7 @@ const Index = () => {
         </header>
         
         <ShopManagement 
-          shop={shop}
+          shopDetails={shop}
           onShopUpdate={fetchShopDetails}
           transactions={transactions}
           onAddExpense={handleAddExpense}
@@ -254,7 +254,7 @@ const Index = () => {
             onRemoveItem={removeFromCart}
             onClearCart={clearCart}
             total={getCartTotal()}
-            shop={shop}
+            shopDetails={shop}
           />
           
           <BluetoothPrinter
@@ -264,7 +264,7 @@ const Index = () => {
             cart={cart}
             total={getCartTotal()}
             onOrderComplete={handleOrderComplete}
-            shop={shop}
+            shopDetails={shop}
           />
         </div>
       </div>

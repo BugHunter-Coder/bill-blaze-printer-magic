@@ -1,4 +1,3 @@
-
 export interface DatabaseProduct {
   id: string;
   shop_id: string;
@@ -56,6 +55,9 @@ export interface Shop {
   created_at: string;
   updated_at: string;
 }
+
+// Keep ShopDetails as alias for backward compatibility
+export type ShopDetails = Shop;
 
 export interface UserProfile {
   id: string;
@@ -121,6 +123,19 @@ export interface Expense {
   updated_at: string;
 }
 
+export interface DailyReport {
+  date: string;
+  totalSales: number;
+  totalTransactions: number;
+  totalExpenses: number;
+  netProfit: number;
+  topProducts: Array<{
+    name: string;
+    quantity: number;
+    revenue: number;
+  }>;
+}
+
 export const CURRENCIES = [
   { code: 'USD', name: 'US Dollar', symbol: '$' },
   { code: 'EUR', name: 'Euro', symbol: '€' },
@@ -137,4 +152,4 @@ export const PAYMENT_METHODS = [
   { value: 'upi', label: 'UPI' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
   { value: 'other', label: 'Other' },
-];
+] as const;
