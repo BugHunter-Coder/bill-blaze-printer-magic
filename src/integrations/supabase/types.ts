@@ -505,9 +505,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_user_shop_id: {
+      get_current_user_shop_id: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      is_shop_owner: {
+        Args: { shop_uuid: string }
+        Returns: boolean
       }
     }
     Enums: {
