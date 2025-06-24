@@ -34,14 +34,13 @@ export const ShopManagement = ({
         
         <TabsContent value="sales" className="mt-6">
           <SalesReport 
-            shopDetails={shopDetails}
             transactions={transactions}
           />
         </TabsContent>
         
         <TabsContent value="expenses" className="mt-6">
           <ExpenseTracker 
-            shopDetails={shopDetails}
+            transactions={transactions}
             onAddExpense={onAddExpense}
           />
         </TabsContent>
