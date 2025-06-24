@@ -1,5 +1,7 @@
 
-import { Store, Bluetooth, BluetoothConnected, Wifi, WifiOff } from 'lucide-react';
+import { Store, Bluetooth, BluetoothConnected, Wifi, LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
 import { Shop } from '@/types/pos';
 
 interface HeaderProps {
@@ -9,6 +11,15 @@ interface HeaderProps {
 }
 
 export const Header = ({ isBluetoothConnected, printer, shop }: HeaderProps) => {
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
   return (
     <div className="flex items-center space-x-4">
       <Store className="h-8 w-8 text-blue-600" />
@@ -33,6 +44,16 @@ export const Header = ({ isBluetoothConnected, printer, shop }: HeaderProps) => 
           <Wifi className="h-4 w-4 text-green-600" />
           <span className="text-xs text-gray-600">Online</span>
         </div>
+
+        <Button
+          onClick={handleLogout}
+          variant="outline"
+          size="sm"
+          className="flex items-center space-x-1"
+        >
+          <LogOut className="h-4 w-4" />
+          <span>Logout</span>
+        </Button>
       </div>
     </div>
   );
