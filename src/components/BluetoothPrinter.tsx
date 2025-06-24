@@ -3,19 +3,36 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Bluetooth, BluetoothConnected, Smartphone, Wifi, AlertCircle, CheckCircle } from 'lucide-react';
+import { Bluetooth, BluetoothConnected, Smartphone, Wifi, AlertCircle, CheckCircle, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { CartItem, Shop } from '@/types/pos';
 
 interface BluetoothPrinterProps {
-  onConnectionChange: (isConnected: boolean, device: BluetoothDevice | null) => void;
+  isConnected: boolean;
+  onConnectionChange: (isConnected: boolean) => void;
+  onPrinterChange: (device: BluetoothDevice | null) => void;
+  cart: CartItem[];
+  total: number;
+  onOrderComplete: (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => Promise<void>;
+  shopDetails: Shop;
 }
 
-export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) => {
-  const [isConnected, setIsConnected] = useState(false);
+export const BluetoothPrinter = ({ 
+  isConnected: externalIsConnected, 
+  onConnectionChange: externalOnConnectionChange,
+  onPrinterChange,
+  cart,
+  total,
+  onOrderComplete,
+  shopDetails
+}: BluetoothPrinterProps) => {
   const [device, setDevice] = useState<BluetoothDevice | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [bluetoothSupported, setBluetoothSupported] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'>('cash');
+  const [directAmount, setDirectAmount] = useState<string>('');
+  const [isDirectBilling, setIsDirectBilling] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -93,8 +110,8 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
       
       if (server) {
         setDevice(requestDevice);
-        setIsConnected(true);
-        onConnectionChange(true, requestDevice);
+        externalOnConnectionChange(true);
+        onPrinterChange(requestDevice);
         
         toast({
           title: "Bluetooth Connected",
@@ -103,9 +120,9 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
 
         // Handle disconnection
         requestDevice.addEventListener('gattserverdisconnected', () => {
-          setIsConnected(false);
+          externalOnConnectionChange(false);
           setDevice(null);
-          onConnectionChange(false, null);
+          onPrinterChange(null);
           toast({
             title: "Bluetooth Disconnected",
             description: "Device has been disconnected",
@@ -143,9 +160,9 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
     if (device && device.gatt?.connected) {
       await device.gatt.disconnect();
     }
-    setIsConnected(false);
+    externalOnConnectionChange(false);
     setDevice(null);
-    onConnectionChange(false, null);
+    onPrinterChange(null);
     
     toast({
       title: "Disconnected",
@@ -154,7 +171,7 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
   };
 
   const printTest = async () => {
-    if (!device || !isConnected) {
+    if (!device || !externalIsConnected) {
       toast({
         title: "Not Connected",
         description: "Please connect to a printer first",
@@ -174,6 +191,29 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
       toast({
         title: "Print Failed",
         description: "Failed to send test print",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCompleteOrder = async () => {
+    try {
+      const amount = isDirectBilling ? parseFloat(directAmount) : undefined;
+      await onOrderComplete(paymentMethod, amount);
+      
+      toast({
+        title: "Order Completed",
+        description: "Transaction recorded successfully",
+      });
+
+      // Reset form
+      setDirectAmount('');
+      setIsDirectBilling(false);
+    } catch (error) {
+      console.error('Order completion error:', error);
+      toast({
+        title: "Order Failed",
+        description: "Failed to complete the order",
         variant: "destructive",
       });
     }
@@ -210,6 +250,71 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
               </ul>
             </div>
           )}
+
+          {/* Payment and checkout section even without Bluetooth */}
+          <div className="border-t pt-4 space-y-4">
+            <h4 className="font-semibold">Complete Order</h4>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Payment Method</label>
+                <select 
+                  value={paymentMethod} 
+                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="directBilling"
+                  checked={isDirectBilling}
+                  onChange={(e) => setIsDirectBilling(e.target.checked)}
+                />
+                <label htmlFor="directBilling" className="text-sm">Direct billing (custom amount)</label>
+              </div>
+
+              {isDirectBilling && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Amount</label>
+                  <input
+                    type="number"
+                    value={directAmount}
+                    onChange={(e) => setDirectAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="w-full p-2 border rounded"
+                    step="0.01"
+                  />
+                </div>
+              )}
+
+              <div className="text-sm">
+                <p>Total: ₹{isDirectBilling ? directAmount || '0' : total.toFixed(2)}</p>
+                {shopDetails && (
+                  <p>Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%): ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * shopDetails.tax_rate).toFixed(2)}</p>
+                )}
+                <p className="font-semibold">
+                  Final Total: ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * (1 + (shopDetails?.tax_rate || 0))).toFixed(2)}
+                </p>
+              </div>
+
+              <Button 
+                onClick={handleCompleteOrder} 
+                className="w-full"
+                disabled={(!cart.length && !isDirectBilling) || (isDirectBilling && !directAmount)}
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Complete Order
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
@@ -219,7 +324,7 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center">
-          {isConnected ? (
+          {externalIsConnected ? (
             <BluetoothConnected className="h-5 w-5 mr-2 text-green-600" />
           ) : (
             <Bluetooth className="h-5 w-5 mr-2 text-gray-400" />
@@ -241,7 +346,7 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
         <div className="flex items-center justify-between">
           <div>
             <p className="font-medium">
-              Status: {isConnected ? 'Connected' : 'Not Connected'}
+              Status: {externalIsConnected ? 'Connected' : 'Not Connected'}
             </p>
             {device && (
               <p className="text-sm text-gray-600">
@@ -250,7 +355,7 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
             )}
           </div>
           <div className="flex items-center">
-            {isConnected ? (
+            {externalIsConnected ? (
               <CheckCircle className="h-5 w-5 text-green-600" />
             ) : (
               <AlertCircle className="h-5 w-5 text-gray-400" />
@@ -259,7 +364,7 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
-          {!isConnected ? (
+          {!externalIsConnected ? (
             <Button 
               onClick={connectToDevice} 
               disabled={isConnecting}
@@ -287,6 +392,71 @@ export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) 
               </Button>
             </>
           )}
+        </div>
+
+        {/* Payment and checkout section */}
+        <div className="border-t pt-4 space-y-4">
+          <h4 className="font-semibold">Complete Order</h4>
+          
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Payment Method</label>
+              <select 
+                value={paymentMethod} 
+                onChange={(e) => setPaymentMethod(e.target.value as any)}
+                className="w-full p-2 border rounded"
+              >
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="upi">UPI</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="directBilling"
+                checked={isDirectBilling}
+                onChange={(e) => setIsDirectBilling(e.target.checked)}
+              />
+              <label htmlFor="directBilling" className="text-sm">Direct billing (custom amount)</label>
+            </div>
+
+            {isDirectBilling && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Amount</label>
+                <input
+                  type="number"
+                  value={directAmount}
+                  onChange={(e) => setDirectAmount(e.target.value)}
+                  placeholder="Enter amount"
+                  className="w-full p-2 border rounded"
+                  step="0.01"
+                />
+              </div>
+            )}
+
+            <div className="text-sm">
+              <p>Total: ₹{isDirectBilling ? directAmount || '0' : total.toFixed(2)}</p>
+              {shopDetails && (
+                <p>Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%): ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * shopDetails.tax_rate).toFixed(2)}</p>
+              )}
+              <p className="font-semibold">
+                Final Total: ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * (1 + (shopDetails?.tax_rate || 0))).toFixed(2)}
+              </p>
+            </div>
+
+            <Button 
+              onClick={handleCompleteOrder} 
+              className="w-full"
+              disabled={(!cart.length && !isDirectBilling) || (isDirectBilling && !directAmount)}
+            >
+              <CreditCard className="h-4 w-4 mr-2" />
+              Complete Order
+            </Button>
+          </div>
         </div>
 
         <div className="text-xs text-gray-500 space-y-1">

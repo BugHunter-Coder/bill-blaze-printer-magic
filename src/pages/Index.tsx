@@ -8,6 +8,7 @@ import { BluetoothPrinter } from '@/components/BluetoothPrinter';
 import { Header } from '@/components/Header';
 import { ShopManagement } from '@/components/ShopManagement';
 import ShopSetup from '@/components/ShopSetup';
+import { InventorySetupPrompt } from '@/components/InventorySetupPrompt';
 import { Button } from '@/components/ui/button';
 import { Product, CartItem, Shop, Expense, Transaction } from '@/types/pos';
 import { Store, ShoppingCart } from 'lucide-react';
@@ -21,15 +22,45 @@ const Index = () => {
   const [shop, setShop] = useState<Shop | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shopLoading, setShopLoading] = useState(true);
+  const [showInventorySetup, setShowInventorySetup] = useState(false);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
 
   useEffect(() => {
     if (profile?.shop_id) {
       fetchShopDetails();
       fetchTransactions();
+      checkInventoryStatus();
     } else {
       setShopLoading(false);
+      setInventoryLoading(false);
     }
   }, [profile]);
+
+  const checkInventoryStatus = async () => {
+    if (!profile?.shop_id) {
+      setInventoryLoading(false);
+      return;
+    }
+
+    try {
+      const { count, error } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('shop_id', profile.shop_id)
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      // Show inventory setup if no products exist
+      if (!count || count === 0) {
+        setShowInventorySetup(true);
+      }
+    } catch (error) {
+      console.error('Error checking inventory status:', error);
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
 
   const fetchShopDetails = async () => {
     if (!profile?.shop_id) return;
@@ -66,33 +97,6 @@ const Index = () => {
       console.error('Error fetching transactions:', error);
     }
   };
-
-  if (loading || shopLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  if (!profile?.shop_id) {
-    return <ShopSetup onShopCreated={fetchShopDetails} />;
-  }
-
-  if (!shop) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Shop not found</h2>
-          <p className="text-gray-600">Please contact support for assistance.</p>
-        </div>
-      </div>
-    );
-  }
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -202,6 +206,46 @@ const Index = () => {
       console.error('Error adding expense:', error);
     }
   };
+
+  if (loading || shopLoading || inventoryLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (!profile?.shop_id) {
+    return <ShopSetup onShopCreated={fetchShopDetails} />;
+  }
+
+  if (!shop) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Shop not found</h2>
+          <p className="text-gray-600">Please contact support for assistance.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show inventory setup if no products exist
+  if (showInventorySetup) {
+    return (
+      <InventorySetupPrompt
+        onSetupComplete={() => {
+          setShowInventorySetup(false);
+          setCurrentView('management');
+        }}
+        onProceedAnyway={() => setShowInventorySetup(false)}
+      />
+    );
+  }
 
   if (currentView === 'management') {
     return (
