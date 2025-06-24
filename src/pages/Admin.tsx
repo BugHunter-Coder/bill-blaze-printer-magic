@@ -7,21 +7,31 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Store, Users, TrendingUp, Settings, Eye, Trash2 } from 'lucide-react';
+import { Store, Users, TrendingUp, Settings, Eye, Trash2, AlertCircle } from 'lucide-react';
 import { Shop, UserProfile } from '@/types/pos';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const Admin = () => {
   const { user, profile, loading } = useAuth();
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopUsers, setShopUsers] = useState<{ [key: string]: UserProfile[] }>({});
   const [loadingShops, setLoadingShops] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (profile) {
-      fetchShops();
+      // Check if user is admin
+      const adminCheck = profile.role === 'admin' || 
+                        user?.email === 'admin@billblaze.com' ||
+                        user?.email?.includes('admin');
+      setIsAdmin(adminCheck);
+      
+      if (adminCheck) {
+        fetchShops();
+      }
     }
-  }, [profile]);
+  }, [profile, user]);
 
   const fetchShops = async () => {
     try {
@@ -41,7 +51,10 @@ const Admin = () => {
           .select('*')
           .eq('shop_id', shop.id);
         
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching users for shop:', shop.id, error);
+          return { shopId: shop.id, users: [] };
+        }
         return { shopId: shop.id, users: users || [] };
       });
 
@@ -100,9 +113,34 @@ const Admin = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  // Check if user is admin (you might want to add an admin role check here)
-  // For now, assuming any authenticated user can access admin panel
-  // You should implement proper role-based access control
+  // Check if user has admin access
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center text-red-600">
+              <AlertCircle className="h-5 w-5 mr-2" />
+              Access Denied
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Alert>
+              <AlertDescription>
+                You don't have admin privileges to access this panel. Please contact your system administrator.
+              </AlertDescription>
+            </Alert>
+            <Button 
+              onClick={() => window.location.href = '/'} 
+              className="w-full mt-4"
+            >
+              Return to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -112,7 +150,10 @@ const Admin = () => {
           <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
         </div>
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-600">Welcome, {profile?.full_name}</span>
+          <Badge variant="outline" className="text-green-600">
+            Admin Access
+          </Badge>
+          <span className="text-sm text-gray-600">Welcome, {profile?.full_name || user.email}</span>
         </div>
       </header>
 
@@ -138,7 +179,7 @@ const Admin = () => {
                     <p><strong>Address:</strong> {shop.address || 'Not provided'}</p>
                     <p><strong>Phone:</strong> {shop.phone || 'Not provided'}</p>
                     <p><strong>Email:</strong> {shop.email || 'Not provided'}</p>
-                    <p><strong>Tax Rate:</strong> {(shop.tax_rate * 100).toFixed(2)}%</p>
+                    <p><strong>Tax Rate:</strong> {((shop.tax_rate || 0) * 100).toFixed(2)}%</p>
                   </div>
                   
                   <div className="flex items-center text-sm text-gray-600">
@@ -150,14 +191,14 @@ const Admin = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => toggleShopStatus(shop.id, shop.is_active)}
+                      onClick={() => toggleShopStatus(shop.id, shop.is_active || false)}
                     >
                       {shop.is_active ? 'Deactivate' : 'Activate'}
                     </Button>
                   </div>
 
                   <div className="text-xs text-gray-500">
-                    Created: {new Date(shop.created_at).toLocaleDateString()}
+                    Created: {new Date(shop.created_at || '').toLocaleDateString()}
                   </div>
                 </CardContent>
               </Card>

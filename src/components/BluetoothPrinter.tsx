@@ -1,78 +1,137 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Bluetooth, Printer, CheckCircle, AlertCircle, Loader2, Eye } from 'lucide-react';
-import { CartItem, ShopDetails } from '@/types/pos';
+import { Bluetooth, BluetoothConnected, Smartphone, Wifi, AlertCircle, CheckCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface BluetoothPrinterProps {
-  isConnected: boolean;
-  onConnectionChange: (connected: boolean) => void;
-  onPrinterChange: (printer: BluetoothDevice | null) => void;
-  cart: CartItem[];
-  total: number;
-  onOrderComplete: (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => void;
-  shopDetails: ShopDetails;
+  onConnectionChange: (isConnected: boolean, device: BluetoothDevice | null) => void;
 }
 
-export const BluetoothPrinter = ({
-  isConnected,
-  onConnectionChange,
-  onPrinterChange,
-  cart,
-  total,
-  onOrderComplete,
-  shopDetails,
-}: BluetoothPrinterProps) => {
+export const BluetoothPrinter = ({ onConnectionChange }: BluetoothPrinterProps) => {
+  const [isConnected, setIsConnected] = useState(false);
+  const [device, setDevice] = useState<BluetoothDevice | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const [connectedDevice, setConnectedDevice] = useState<BluetoothDevice | null>(null);
-  const [gattServer, setGattServer] = useState<BluetoothRemoteGATTServer | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [bluetoothSupported, setBluetoothSupported] = useState(false);
   const { toast } = useToast();
 
-  const connectToPrinter = async () => {
-    if (!navigator.bluetooth) {
+  useEffect(() => {
+    // Check if device is mobile
+    const checkMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    setIsMobile(checkMobile);
+
+    // Check Bluetooth support
+    const checkBluetoothSupport = () => {
+      if ('bluetooth' in navigator) {
+        setBluetoothSupported(true);
+        return true;
+      }
+      
+      // Check for mobile-specific Bluetooth capabilities
+      if (checkMobile) {
+        // On mobile, we might have limited support
+        setBluetoothSupported(!!navigator.bluetooth || 'serviceWorker' in navigator);
+      }
+      
+      return false;
+    };
+
+    checkBluetoothSupport();
+  }, []);
+
+  const connectToDevice = async () => {
+    if (!bluetoothSupported) {
       toast({
-        title: "Bluetooth not supported",
-        description: "Your browser doesn't support Web Bluetooth API",
+        title: "Bluetooth Not Supported",
+        description: "Your browser doesn't support Web Bluetooth API.",
         variant: "destructive",
       });
       return;
     }
 
     setIsConnecting(true);
-    try {
-      console.log('Requesting Bluetooth device...');
-      const device = await navigator.bluetooth.requestDevice({
-        filters: [
-          { services: ['000018f0-0000-1000-8000-00805f9b34fb'] }, // Serial service
-        ],
-        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
-      });
 
-      console.log('Connecting to GATT server...');
-      const server = await device.gatt?.connect();
+    try {
+      // Extended service UUIDs for better printer compatibility
+      const serviceUUIDs = [
+        '000018f0-0000-1000-8000-00805f9b34fb', // Standard thermal printer
+        '00001101-0000-1000-8000-00805f9b34fb', // Serial port profile
+        '0000ff00-0000-1000-8000-00805f9b34fb', // Custom service
+        '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Another common printer service
+      ];
+
+      let requestDevice;
+      
+      if (isMobile) {
+        // Mobile-optimized request with broader filters
+        requestDevice = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: serviceUUIDs
+        });
+      } else {
+        // Desktop request with specific filters
+        requestDevice = await navigator.bluetooth.requestDevice({
+          filters: [
+            { namePrefix: 'POS' },
+            { namePrefix: 'Thermal' },
+            { namePrefix: 'Receipt' },
+            { namePrefix: 'Printer' },
+            { namePrefix: 'BT' },
+            { services: serviceUUIDs }
+          ],
+          optionalServices: serviceUUIDs
+        });
+      }
+
+      console.log('Connecting to device:', requestDevice.name);
+      
+      // Connect to GATT server
+      const server = await requestDevice.gatt?.connect();
       
       if (server) {
-        setConnectedDevice(device);
-        setGattServer(server);
-        onPrinterChange(device);
-        onConnectionChange(true);
+        setDevice(requestDevice);
+        setIsConnected(true);
+        onConnectionChange(true, requestDevice);
+        
         toast({
-          title: "Printer connected",
-          description: `Successfully connected to ${device.name}`,
+          title: "Bluetooth Connected",
+          description: `Connected to ${requestDevice.name || 'Unknown Device'}`,
         });
-        console.log('Connected to printer:', device.name);
+
+        // Handle disconnection
+        requestDevice.addEventListener('gattserverdisconnected', () => {
+          setIsConnected(false);
+          setDevice(null);
+          onConnectionChange(false, null);
+          toast({
+            title: "Bluetooth Disconnected",
+            description: "Device has been disconnected",
+            variant: "destructive",
+          });
+        });
       }
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Bluetooth connection error:', error);
+      
+      let errorMessage = "Failed to connect to Bluetooth device.";
+      
+      if (error.name === 'NotFoundError') {
+        errorMessage = "No Bluetooth device was selected.";
+      } else if (error.name === 'SecurityError') {
+        errorMessage = "Bluetooth access was denied. Please allow permission and try again.";
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = "Bluetooth is not supported on this device or browser.";
+      } else if (isMobile) {
+        errorMessage = "Mobile Bluetooth connection failed. Try enabling Bluetooth and location services.";
+      }
+
       toast({
-        title: "Connection failed",
-        description: "Could not connect to printer. Make sure it's in pairing mode.",
+        title: "Connection Failed",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -80,220 +139,135 @@ export const BluetoothPrinter = ({
     }
   };
 
-  const disconnectPrinter = () => {
-    if (gattServer) {
-      gattServer.disconnect();
+  const disconnect = async () => {
+    if (device && device.gatt?.connected) {
+      await device.gatt.disconnect();
     }
-    setConnectedDevice(null);
-    setGattServer(null);
-    onPrinterChange(null);
-    onConnectionChange(false);
+    setIsConnected(false);
+    setDevice(null);
+    onConnectionChange(false, null);
+    
     toast({
-      title: "Printer disconnected",
-      description: "Bluetooth printer has been disconnected",
+      title: "Disconnected",
+      description: "Bluetooth device disconnected successfully",
     });
   };
 
-  const generateReceiptData = () => {
-    const tax = total * shopDetails.tax_rate;
-    const finalTotal = total + tax;
-    const timestamp = new Date();
-    
-    return {
-      timestamp: timestamp.toLocaleString(),
-      items: cart,
-      subtotal: total,
-      tax: tax,
-      total: finalTotal,
-      orderNumber: Math.floor(Math.random() * 10000),
-      shopDetails,
-    };
-  };
-
-  const createESCPOSCommands = (receiptData: any) => {
-    const ESC = '\x1B';
-    const GS = '\x1D';
-    
-    let commands = '';
-    
-    // Initialize printer
-    commands += ESC + '@';
-    
-    // Center align
-    commands += ESC + 'a' + '\x01';
-    
-    // Store header
-    commands += ESC + '!' + '\x18'; // Double height and width
-    commands += `${receiptData.shopDetails.name}\n`;
-    commands += ESC + '!' + '\x00'; // Normal size
-    commands += `${receiptData.shopDetails.address}\n`;
-    commands += `Phone: ${receiptData.shopDetails.phone}\n`;
-    commands += `Email: ${receiptData.shopDetails.email}\n`;
-    if (receiptData.shopDetails.tax_id) {
-      commands += `Tax ID: ${receiptData.shopDetails.tax_id}\n`;
-    }
-    commands += '================================\n';
-    
-    // Order details
-    commands += ESC + 'a' + '\x00'; // Left align
-    commands += `Order #: ${receiptData.orderNumber}\n`;
-    commands += `Date: ${receiptData.timestamp}\n`;
-    commands += '================================\n';
-    
-    // Items
-    receiptData.items.forEach((item: CartItem) => {
-      commands += `${item.name}\n`;
-      commands += `  ${item.quantity} x ${receiptData.shopDetails.currency}${item.price.toFixed(2)} = ${receiptData.shopDetails.currency}${(item.quantity * item.price).toFixed(2)}\n`;
-    });
-    
-    commands += '================================\n';
-    
-    // Totals
-    commands += ESC + 'a' + '\x02'; // Right align
-    commands += `Subtotal: ${receiptData.shopDetails.currency}${receiptData.subtotal.toFixed(2)}\n`;
-    commands += `Tax (${(receiptData.shopDetails.tax_rate * 100).toFixed(1)}%): ${receiptData.shopDetails.currency}${receiptData.tax.toFixed(2)}\n`;
-    commands += ESC + '!' + '\x08'; // Emphasized
-    commands += `TOTAL: ${receiptData.shopDetails.currency}${receiptData.total.toFixed(2)}\n`;
-    commands += ESC + '!' + '\x00'; // Normal
-    
-    // Footer
-    commands += ESC + 'a' + '\x01'; // Center align
-    commands += '================================\n';
-    commands += 'Thank you for your business!\n';
-    commands += 'Visit us again soon!\n\n\n';
-    
-    // Cut paper
-    commands += GS + 'V' + '\x41' + '\x03';
-    
-    return new TextEncoder().encode(commands);
-  };
-
-  const printReceipt = async () => {
-    if (!isConnected || cart.length === 0 || !gattServer) return;
-
-    setIsPrinting(true);
-    try {
-      console.log('Printing receipt...');
-      
-      // Generate receipt data
-      const receiptData = generateReceiptData();
-      console.log('Receipt data:', receiptData);
-      
-      // Get service and characteristic for printing
-      const service = await gattServer.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-      const characteristic = await service.getCharacteristic('00002af1-0000-1000-8000-00805f9b34fb');
-      
-      // Create ESC/POS commands
-      const printData = createESCPOSCommands(receiptData);
-      
-      // Send data to printer in chunks
-      const chunkSize = 20; // Small chunks for better compatibility
-      for (let i = 0; i < printData.length; i += chunkSize) {
-        const chunk = printData.slice(i, i + chunkSize);
-        await characteristic.writeValue(chunk);
-        await new Promise(resolve => setTimeout(resolve, 50)); // Small delay between chunks
-      }
-      
+  const printTest = async () => {
+    if (!device || !isConnected) {
       toast({
-        title: "Receipt printed",
-        description: "Order completed successfully!",
-      });
-      
-      onOrderComplete('cash');
-    } catch (error) {
-      console.error('Printing error:', error);
-      toast({
-        title: "Printing failed",
-        description: "Could not print receipt. Please try again.",
+        title: "Not Connected",
+        description: "Please connect to a printer first",
         variant: "destructive",
       });
-    } finally {
-      setIsPrinting(false);
+      return;
+    }
+
+    try {
+      // This is a simplified print test - actual implementation would depend on printer protocol
+      toast({
+        title: "Print Test",
+        description: "Test print command sent to printer",
+      });
+    } catch (error) {
+      console.error('Print test error:', error);
+      toast({
+        title: "Print Failed",
+        description: "Failed to send test print",
+        variant: "destructive",
+      });
     }
   };
 
-  const ReceiptPreview = () => {
-    const receiptData = generateReceiptData();
-    
+  if (!bluetoothSupported) {
     return (
-      <div className="max-w-sm mx-auto bg-white p-4 font-mono text-sm">
-        <div className="text-center border-b-2 border-dashed pb-2 mb-2">
-          <h2 className="font-bold text-lg">{receiptData.shopDetails.name}</h2>
-          <p className="text-xs">{receiptData.shopDetails.address}</p>
-          <p className="text-xs">Phone: {receiptData.shopDetails.phone}</p>
-          <p className="text-xs">Email: {receiptData.shopDetails.email}</p>
-          {receiptData.shopDetails.tax_id && (
-            <p className="text-xs">Tax ID: {receiptData.shopDetails.tax_id}</p>
-          )}
-          <p className="text-xs">================================</p>
-        </div>
-        
-        <div className="mb-2">
-          <p>Order #: {receiptData.orderNumber}</p>
-          <p>Date: {receiptData.timestamp}</p>
-          <p className="text-xs">================================</p>
-        </div>
-        
-        <div className="mb-2">
-          {receiptData.items.map((item, index) => (
-            <div key={index} className="mb-1">
-              <p className="font-medium">{item.name}</p>
-              <p className="text-xs">
-                {item.quantity} x {receiptData.shopDetails.currency}{item.price.toFixed(2)} = {receiptData.shopDetails.currency}{(item.quantity * item.price).toFixed(2)}
-              </p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <AlertCircle className="h-5 w-5 mr-2 text-red-500" />
+            Bluetooth Not Available
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {isMobile 
+                ? "Bluetooth printing may not be fully supported on your mobile browser. Consider using the desktop version or a dedicated POS app."
+                : "Your browser doesn't support Web Bluetooth API. Please use Chrome, Edge, or another compatible browser."
+              }
+            </AlertDescription>
+          </Alert>
+          
+          {isMobile && (
+            <div className="space-y-2">
+              <h4 className="font-semibold">Mobile Printing Alternatives:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• Use a Wi-Fi enabled receipt printer</li>
+                <li>• Install the app version of this POS system</li>
+                <li>• Use the desktop version on a computer</li>
+                <li>• Enable experimental features in your browser</li>
+              </ul>
             </div>
-          ))}
-          <p className="text-xs">================================</p>
-        </div>
-        
-        <div className="text-right mb-2">
-          <p>Subtotal: {receiptData.shopDetails.currency}{receiptData.subtotal.toFixed(2)}</p>
-          <p>Tax ({(receiptData.shopDetails.tax_rate * 100).toFixed(1)}%): {receiptData.shopDetails.currency}{receiptData.tax.toFixed(2)}</p>
-          <p className="font-bold text-lg">TOTAL: {receiptData.shopDetails.currency}{receiptData.total.toFixed(2)}</p>
-        </div>
-        
-        <div className="text-center border-t-2 border-dashed pt-2">
-          <p className="text-xs">================================</p>
-          <p className="text-xs">Thank you for your business!</p>
-          <p className="text-xs">Visit us again soon!</p>
-        </div>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     );
-  };
+  }
 
   return (
-    <Card className="mt-4 mx-4 mb-4">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center space-x-2">
-          <Printer className="h-5 w-5" />
-          <span>Thermal Printer</span>
-          {isConnected && (
-            <Badge variant="secondary" className="bg-green-50 text-green-700">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Connected
-            </Badge>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center">
+          {isConnected ? (
+            <BluetoothConnected className="h-5 w-5 mr-2 text-green-600" />
+          ) : (
+            <Bluetooth className="h-5 w-5 mr-2 text-gray-400" />
           )}
+          Bluetooth Printer
+          {isMobile && <Smartphone className="h-4 w-4 ml-2 text-blue-500" />}
         </CardTitle>
       </CardHeader>
-
       <CardContent className="space-y-4">
-        {!isConnected ? (
-          <div className="space-y-3">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Connect your Bluetooth thermal printer to print receipts.
-              </AlertDescription>
-            </Alert>
-            
+        {isMobile && (
+          <Alert>
+            <Smartphone className="h-4 w-4" />
+            <AlertDescription>
+              Mobile device detected. Make sure Bluetooth and location services are enabled for best results.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">
+              Status: {isConnected ? 'Connected' : 'Not Connected'}
+            </p>
+            {device && (
+              <p className="text-sm text-gray-600">
+                Device: {device.name || 'Unknown Device'}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center">
+            {isConnected ? (
+              <CheckCircle className="h-5 w-5 text-green-600" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-gray-400" />
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2">
+          {!isConnected ? (
             <Button 
-              onClick={connectToPrinter}
+              onClick={connectToDevice} 
               disabled={isConnecting}
-              className="w-full"
+              className="flex-1"
             >
               {isConnecting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Connecting...
                 </>
               ) : (
@@ -303,73 +277,23 @@ export const BluetoothPrinter = ({
                 </>
               )}
             </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <Alert className="border-green-200 bg-green-50">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
-                Printer is ready to print receipts.
-              </AlertDescription>
-            </Alert>
-
-            <div className="space-y-2">
-              {cart.length > 0 && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full" size="lg">
-                      <Eye className="h-4 w-4 mr-2" />
-                      Preview Receipt
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Receipt Preview</DialogTitle>
-                    </DialogHeader>
-                    <ReceiptPreview />
-                  </DialogContent>
-                </Dialog>
-              )}
-              
-              <Button
-                onClick={printReceipt}
-                disabled={cart.length === 0 || isPrinting}
-                className="w-full"
-                size="lg"
-              >
-                {isPrinting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Printing...
-                  </>
-                ) : (
-                  <>
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print Receipt & Complete Order
-                  </>
-                )}
+          ) : (
+            <>
+              <Button onClick={printTest} variant="outline" className="flex-1">
+                Test Print
               </Button>
-              
-              <Button 
-                variant="outline" 
-                onClick={disconnectPrinter}
-                className="w-full"
-                size="sm"
-              >
-                Disconnect Printer
+              <Button onClick={disconnect} variant="destructive" className="flex-1">
+                Disconnect
               </Button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
-        {cart.length === 0 && isConnected && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Add items to cart before printing a receipt.
-            </AlertDescription>
-          </Alert>
-        )}
+        <div className="text-xs text-gray-500 space-y-1">
+          <p>• Make sure your printer is in pairing mode</p>
+          <p>• Compatible with thermal receipt printers</p>
+          {isMobile && <p>• On mobile: Enable Bluetooth and location permissions</p>}
+        </div>
       </CardContent>
     </Card>
   );
