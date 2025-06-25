@@ -1,18 +1,19 @@
 
 import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Store, Users, Settings, AlertCircle } from 'lucide-react';
+import { Store, Users, Settings, AlertCircle, ArrowLeft } from 'lucide-react';
 import { Shop, UserProfile } from '@/types/pos';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const Admin = () => {
   const { user, profile, loading } = useAuth();
+  const navigate = useNavigate();
   const [shops, setShops] = useState<Shop[]>([]);
   const [shopUsers, setShopUsers] = useState<{ [key: string]: UserProfile[] }>({});
   const [loadingShops, setLoadingShops] = useState(true);
@@ -31,12 +32,12 @@ const Admin = () => {
       console.log('Checking admin access for user:', user?.email);
       console.log('Current profile:', profile);
       
-      // Multiple ways to check admin access
+      // Enhanced admin check - multiple ways to verify admin access
       const isAdminUser = 
         profile?.role === 'admin' || 
         user?.email === 'admin@billblaze.com' ||
-        user?.email?.includes('admin') ||
-        user?.email === 'harjot@iprofit.in'; // Adding your email as admin
+        user?.email === 'harjot@iprofit.in' ||
+        user?.email?.toLowerCase().includes('admin');
       
       console.log('Admin check result:', isAdminUser);
       setIsAdmin(isAdminUser);
@@ -57,9 +58,9 @@ const Admin = () => {
 
   const fetchShops = async () => {
     try {
-      console.log('Fetching shops...');
+      console.log('Fetching shops as admin...');
       
-      // Try to fetch shops without RLS restrictions first
+      // Admin can see all shops - use service_role or bypass RLS if needed
       const { data: shopsData, error: shopsError } = await supabase
         .from('shops')
         .select('*')
@@ -69,6 +70,14 @@ const Admin = () => {
 
       if (shopsError) {
         console.error('Error fetching shops:', shopsError);
+        // If normal query fails, try with a different approach
+        if (shopsError.code === 'PGRST301' || shopsError.message?.includes('permission')) {
+          toast({
+            title: "Limited Access",
+            description: "Admin role may need additional permissions. Contact system administrator.",
+            variant: "destructive",
+          });
+        }
         throw shopsError;
       }
 
@@ -140,6 +149,22 @@ const Admin = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      toast({
+        description: "Logout successful!",
+      });
+      navigate('/auth');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to logout. " + error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading || adminCheckLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -167,14 +192,23 @@ const Admin = () => {
             <Alert>
               <AlertDescription>
                 You don't have admin privileges to access this panel. Your email: {user.email}
+                <br />
+                Your role: {profile?.role || 'No role assigned'}
               </AlertDescription>
             </Alert>
-            <Button 
-              onClick={() => window.location.href = '/'} 
-              className="w-full mt-4"
-            >
-              Return to Dashboard
-            </Button>
+            <div className="flex gap-2 mt-4">
+              <Button 
+                onClick={() => navigate('/dashboard')} 
+                className="flex-1"
+                variant="outline"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Go to Dashboard
+              </Button>
+              <Button onClick={handleLogout} variant="destructive" className="flex-1">
+                Logout
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -193,6 +227,13 @@ const Admin = () => {
             Admin Access
           </Badge>
           <span className="text-sm text-gray-600">Welcome, {profile?.full_name || user.email}</span>
+          <Button onClick={() => navigate('/dashboard')} variant="outline" size="sm">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Dashboard
+          </Button>
+          <Button onClick={handleLogout} variant="destructive" size="sm">
+            Logout
+          </Button>
         </div>
       </header>
 
@@ -231,6 +272,7 @@ const Admin = () => {
                       <p><strong>Phone:</strong> {shop.phone || 'Not provided'}</p>
                       <p><strong>Email:</strong> {shop.email || 'Not provided'}</p>
                       <p><strong>Tax Rate:</strong> {((shop.tax_rate || 0) * 100).toFixed(2)}%</p>
+                      <p><strong>Owner ID:</strong> {shop.owner_id || 'Not assigned'}</p>
                     </div>
                     
                     <div className="flex items-center text-sm text-gray-600">
@@ -260,11 +302,16 @@ const Admin = () => {
               <Store className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900">No shops found</h3>
               <p className="mt-1 text-sm text-gray-500">
-                No shops have been created yet or you don't have permission to view them.
+                No shops have been created yet or there may be permission issues.
               </p>
-              <Button onClick={fetchShops} className="mt-4" variant="outline">
-                Try Again
-              </Button>
+              <div className="mt-4 space-x-2">
+                <Button onClick={fetchShops} variant="outline">
+                  Try Again
+                </Button>
+                <Button onClick={() => navigate('/dashboard')} variant="default">
+                  Go to Dashboard
+                </Button>
+              </div>
             </div>
           )}
         </div>

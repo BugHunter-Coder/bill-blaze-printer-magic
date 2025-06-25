@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Bluetooth, BluetoothConnected, Smartphone, Wifi, AlertCircle, CheckCircle, CreditCard } from 'lucide-react';
+import { Bluetooth, BluetoothConnected, Smartphone, Wifi, AlertCircle, CheckCircle, CreditCard, Share, Download, Apple } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CartItem, Shop } from '@/types/pos';
 
@@ -29,6 +29,7 @@ export const BluetoothPrinter = ({
   const [device, setDevice] = useState<BluetoothDevice | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
   const [bluetoothSupported, setBluetoothSupported] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'>('cash');
   const [directAmount, setDirectAmount] = useState<string>('');
@@ -36,28 +37,141 @@ export const BluetoothPrinter = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if device is mobile
-    const checkMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // Enhanced device detection
+    const userAgent = navigator.userAgent;
+    const checkMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+    const checkIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    
     setIsMobile(checkMobile);
+    setIsIOS(checkIOS);
 
-    // Check Bluetooth support
+    // Enhanced Bluetooth support detection
     const checkBluetoothSupport = () => {
-      if ('bluetooth' in navigator) {
+      if ('bluetooth' in navigator && navigator.bluetooth) {
+        // Additional check for iOS limitations
+        if (checkIOS) {
+          // iOS has very limited Web Bluetooth support
+          setBluetoothSupported(false);
+          return false;
+        }
         setBluetoothSupported(true);
         return true;
       }
       
-      // Check for mobile-specific Bluetooth capabilities
-      if (checkMobile) {
-        // On mobile, we might have limited support
-        setBluetoothSupported(!!navigator.bluetooth || 'serviceWorker' in navigator);
-      }
-      
+      setBluetoothSupported(false);
       return false;
     };
 
     checkBluetoothSupport();
   }, []);
+
+  const generateReceipt = () => {
+    const finalTotal = isDirectBilling ? parseFloat(directAmount) || 0 : total;
+    const taxAmount = finalTotal * (shopDetails?.tax_rate || 0);
+    const grandTotal = finalTotal + taxAmount;
+
+    let receipt = `
+${shopDetails?.name || 'POS System'}
+${shopDetails?.address || ''}
+${shopDetails?.phone || ''}
+${shopDetails?.email || ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Receipt #: ${Date.now()}
+Date: ${new Date().toLocaleString()}
+Cashier: Staff
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ITEMS:
+`;
+
+    if (isDirectBilling) {
+      receipt += `Direct Billing         ₹${finalTotal.toFixed(2)}\n`;
+    } else {
+      cart.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        receipt += `${item.name}\n`;
+        receipt += `  ${item.quantity} × ₹${item.price.toFixed(2)} = ₹${itemTotal.toFixed(2)}\n`;
+      });
+    }
+
+    receipt += `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Subtotal:           ₹${finalTotal.toFixed(2)}
+Tax (${((shopDetails?.tax_rate || 0) * 100).toFixed(1)}%):              ₹${taxAmount.toFixed(2)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOTAL:              ₹${grandTotal.toFixed(2)}
+
+Payment Method: ${paymentMethod.toUpperCase()}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Thank you for your business!
+Visit us again soon.
+    `;
+
+    return receipt.trim();
+  };
+
+  const shareReceipt = async () => {
+    const receiptText = generateReceipt();
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Receipt',
+          text: receiptText,
+        });
+        toast({
+          title: "Receipt Shared",
+          description: "Receipt shared successfully",
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+        copyToClipboard(receiptText);
+      }
+    } else {
+      copyToClipboard(receiptText);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({
+        title: "Receipt Copied",
+        description: "Receipt copied to clipboard",
+      });
+    }).catch(() => {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      toast({
+        title: "Receipt Copied",
+        description: "Receipt copied to clipboard",
+      });
+    });
+  };
+
+  const downloadReceipt = () => {
+    const receiptText = generateReceipt();
+    const blob = new Blob([receiptText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `receipt-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Receipt Downloaded",
+      description: "Receipt file downloaded",
+    });
+  };
 
   const connectToDevice = async () => {
     if (!bluetoothSupported) {
@@ -72,40 +186,27 @@ export const BluetoothPrinter = ({
     setIsConnecting(true);
 
     try {
-      // Extended service UUIDs for better printer compatibility
       const serviceUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb', // Standard thermal printer
-        '00001101-0000-1000-8000-00805f9b34fb', // Serial port profile
-        '0000ff00-0000-1000-8000-00805f9b34fb', // Custom service
-        '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Another common printer service
+        '000018f0-0000-1000-8000-00805f9b34fb',
+        '00001101-0000-1000-8000-00805f9b34fb',
+        '0000ff00-0000-1000-8000-00805f9b34fb',
+        '49535343-fe7d-4ae5-8fa9-9fafd205e455',
       ];
 
-      let requestDevice;
-      
-      if (isMobile) {
-        // Mobile-optimized request with broader filters
-        requestDevice = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: serviceUUIDs
-        });
-      } else {
-        // Desktop request with specific filters
-        requestDevice = await navigator.bluetooth.requestDevice({
-          filters: [
-            { namePrefix: 'POS' },
-            { namePrefix: 'Thermal' },
-            { namePrefix: 'Receipt' },
-            { namePrefix: 'Printer' },
-            { namePrefix: 'BT' },
-            { services: serviceUUIDs }
-          ],
-          optionalServices: serviceUUIDs
-        });
-      }
+      const requestDevice = await navigator.bluetooth.requestDevice({
+        filters: [
+          { namePrefix: 'POS' },
+          { namePrefix: 'Thermal' },
+          { namePrefix: 'Receipt' },
+          { namePrefix: 'Printer' },
+          { namePrefix: 'BT' },
+          { services: serviceUUIDs }
+        ],
+        optionalServices: serviceUUIDs
+      });
 
       console.log('Connecting to device:', requestDevice.name);
       
-      // Connect to GATT server
       const server = await requestDevice.gatt?.connect();
       
       if (server) {
@@ -118,7 +219,6 @@ export const BluetoothPrinter = ({
           description: `Connected to ${requestDevice.name || 'Unknown Device'}`,
         });
 
-        // Handle disconnection
         requestDevice.addEventListener('gattserverdisconnected', () => {
           externalOnConnectionChange(false);
           setDevice(null);
@@ -142,8 +242,6 @@ export const BluetoothPrinter = ({
         errorMessage = "Bluetooth access was denied. Please allow permission and try again.";
       } else if (error.name === 'NotSupportedError') {
         errorMessage = "Bluetooth is not supported on this device or browser.";
-      } else if (isMobile) {
-        errorMessage = "Mobile Bluetooth connection failed. Try enabling Bluetooth and location services.";
       }
 
       toast({
@@ -181,7 +279,6 @@ export const BluetoothPrinter = ({
     }
 
     try {
-      // This is a simplified print test - actual implementation would depend on printer protocol
       toast({
         title: "Print Test",
         description: "Test print command sent to printer",
@@ -206,7 +303,6 @@ export const BluetoothPrinter = ({
         description: "Transaction recorded successfully",
       });
 
-      // Reset form
       setDirectAmount('');
       setIsDirectBilling(false);
     } catch (error) {
@@ -219,6 +315,119 @@ export const BluetoothPrinter = ({
     }
   };
 
+  // iOS-specific UI
+  if (isIOS) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Apple className="h-5 w-5 mr-2 text-gray-400" />
+            iOS Printing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <Apple className="h-4 w-4" />
+            <AlertDescription>
+              <strong>iOS Device Detected:</strong> Web Bluetooth is not supported on iOS. 
+              Use the alternative options below to handle receipts.
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-3">
+            <h4 className="font-semibold">Alternative Printing Options:</h4>
+            <div className="grid grid-cols-1 gap-2">
+              <Button onClick={shareReceipt} variant="outline" className="justify-start">
+                <Share className="h-4 w-4 mr-2" />
+                Share Receipt
+              </Button>
+              <Button onClick={downloadReceipt} variant="outline" className="justify-start">
+                <Download className="h-4 w-4 mr-2" />
+                Download Receipt
+              </Button>
+              <Button onClick={() => copyToClipboard(generateReceipt())} variant="outline" className="justify-start">
+                <CreditCard className="h-4 w-4 mr-2" />
+                Copy Receipt Text
+              </Button>
+            </div>
+          </div>
+
+          {/* Payment section */}
+          <div className="border-t pt-4 space-y-4">
+            <h4 className="font-semibold">Complete Order</h4>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Payment Method</label>
+                <select 
+                  value={paymentMethod} 
+                  onChange={(e) => setPaymentMethod(e.target.value as any)}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="directBilling"
+                  checked={isDirectBilling}
+                  onChange={(e) => setIsDirectBilling(e.target.checked)}
+                />
+                <label htmlFor="directBilling" className="text-sm">Direct billing (custom amount)</label>
+              </div>
+
+              {isDirectBilling && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Amount</label>
+                  <input
+                    type="number"
+                    value={directAmount}
+                    onChange={(e) => setDirectAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="w-full p-2 border rounded"
+                    step="0.01"
+                  />
+                </div>
+              )}
+
+              <div className="text-sm">
+                <p>Total: ₹{isDirectBilling ? directAmount || '0' : total.toFixed(2)}</p>
+                {shopDetails && (
+                  <p>Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%): ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * shopDetails.tax_rate).toFixed(2)}</p>
+                )}
+                <p className="font-semibold">
+                  Final Total: ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * (1 + (shopDetails?.tax_rate || 0))).toFixed(2)}
+                </p>
+              </div>
+
+              <Button 
+                onClick={handleCompleteOrder} 
+                className="w-full"
+                disabled={(!cart.length && !isDirectBilling) || (isDirectBilling && !directAmount)}
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Complete Order
+              </Button>
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-500 space-y-1">
+            <p>• iOS doesn't support Web Bluetooth for security reasons</p>
+            <p>• Use WiFi printers or the share/download options above</p>
+            <p>• Consider using AirPrint compatible printers</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // General mobile or non-Bluetooth supported devices
   if (!bluetoothSupported) {
     return (
       <Card>
@@ -233,25 +442,31 @@ export const BluetoothPrinter = ({
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               {isMobile 
-                ? "Bluetooth printing may not be fully supported on your mobile browser. Consider using the desktop version or a dedicated POS app."
+                ? "Bluetooth printing may not be fully supported on your mobile browser. Use the alternative options below."
                 : "Your browser doesn't support Web Bluetooth API. Please use Chrome, Edge, or another compatible browser."
               }
             </AlertDescription>
           </Alert>
           
-          {isMobile && (
-            <div className="space-y-2">
-              <h4 className="font-semibold">Mobile Printing Alternatives:</h4>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Use a Wi-Fi enabled receipt printer</li>
-                <li>• Install the app version of this POS system</li>
-                <li>• Use the desktop version on a computer</li>
-                <li>• Enable experimental features in your browser</li>
-              </ul>
+          <div className="space-y-3">
+            <h4 className="font-semibold">Alternative Options:</h4>
+            <div className="grid grid-cols-1 gap-2">
+              <Button onClick={shareReceipt} variant="outline" className="justify-start">
+                <Share className="h-4 w-4 mr-2" />
+                Share Receipt
+              </Button>
+              <Button onClick={downloadReceipt} variant="outline" className="justify-start">
+                <Download className="h-4 w-4 mr-2" />
+                Download Receipt
+              </Button>
+              <Button onClick={() => copyToClipboard(generateReceipt())} variant="outline" className="justify-start">
+                <CreditCard className="h-4 w-4 mr-2" />
+                Copy Receipt Text
+              </Button>
             </div>
-          )}
+          </div>
 
-          {/* Payment and checkout section even without Bluetooth */}
+          {/* Payment and checkout section */}
           <div className="border-t pt-4 space-y-4">
             <h4 className="font-semibold">Complete Order</h4>
             
@@ -320,6 +535,7 @@ export const BluetoothPrinter = ({
     );
   }
 
+  // Original Bluetooth-supported interface
   return (
     <Card>
       <CardHeader>
@@ -392,6 +608,24 @@ export const BluetoothPrinter = ({
               </Button>
             </>
           )}
+        </div>
+
+        {/* Alternative options for Bluetooth-supported devices */}
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold">Alternative Options:</h4>
+          <div className="grid grid-cols-3 gap-2">
+            <Button onClick={shareReceipt} variant="outline" size="sm">
+              <Share className="h-4 w-4 mr-1" />
+              Share
+            </Button>
+            <Button onClick={downloadReceipt} variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-1" />
+              Download
+            </Button>
+            <Button onClick={() => copyToClipboard(generateReceipt())} variant="outline" size="sm">
+              Copy
+            </Button>
+          </div>
         </div>
 
         {/* Payment and checkout section */}

@@ -49,8 +49,21 @@ const Index = () => {
   const [profileShopId, setProfileShopId] = useState('');
   const { toast } = useToast();
 
-  // Add navigation
   const navigate = useNavigate();
+
+  // Check if user should be redirected to admin panel
+  useEffect(() => {
+    if (user && profile && !loading) {
+      const isAdmin = profile.role === 'admin' || 
+                     user.email === 'admin@billblaze.com' || 
+                     user.email === 'harjot@iprofit.in';
+      
+      if (isAdmin) {
+        navigate('/admin');
+        return;
+      }
+    }
+  }, [user, profile, loading, navigate]);
 
   useEffect(() => {
     if (user && profile) {

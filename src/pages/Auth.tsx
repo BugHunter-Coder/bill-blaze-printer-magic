@@ -1,6 +1,5 @@
-
 import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +11,8 @@ import { Store, Mail, Lock, User, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Auth = () => {
-  const { user, signIn, signUp, loading } = useAuth();
+  const { user, signIn, signUp, loading, profile } = useAuth();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   
   const [signInData, setSignInData] = useState({
@@ -41,7 +41,11 @@ const Auth = () => {
   }
 
   if (user) {
-    return <Navigate to="/" replace />;
+    // Redirect based on user role
+    if (profile?.role === 'admin' || user.email === 'admin@billblaze.com' || user.email === 'harjot@iprofit.in') {
+      return <Navigate to="/admin" replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
   }
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -54,6 +58,7 @@ const Auth = () => {
       toast.error(error.message);
     } else {
       toast.success('Welcome back!');
+      // Navigation will be handled by the redirect logic above
     }
     
     setIsLoading(false);
@@ -90,8 +95,7 @@ const Auth = () => {
       toast.error(error.message);
     } else {
       toast.success('Admin login successful!');
-      // Redirect to admin panel
-      window.location.href = '/admin';
+      // Navigation will be handled by the redirect logic above
     }
     
     setIsLoading(false);
