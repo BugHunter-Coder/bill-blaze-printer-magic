@@ -45,7 +45,7 @@ const Index = () => {
   const [isShopActive, setIsShopActive] = useState(true);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [profileFullName, setProfileFullName] = useState('');
-  const [profileRole, setProfileRole] = useState('');
+  const [profileRole, setProfileRole] = useState<'admin' | 'cashier' | 'manager'>('cashier');
   const [profileShopId, setProfileShopId] = useState('');
   const { toast } = useToast();
 
@@ -55,7 +55,7 @@ const Index = () => {
   useEffect(() => {
     if (user && profile) {
       setProfileFullName(profile.full_name || '');
-      setProfileRole(profile.role || '');
+      setProfileRole(profile.role || 'cashier');
       setProfileShopId(profile.shop_id || '');
     }
   }, [user, profile]);
@@ -316,17 +316,20 @@ const Index = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role">Role</Label>
-                <Input
-                  id="role"
-                  type="text"
-                  value={profileRole}
-                  onChange={(e) => setProfileRole(e.target.value)}
-                  disabled // Disable role editing for now
-                />
+                <Select onValueChange={(value: 'admin' | 'cashier' | 'manager') => setProfileRole(value)} value={profileRole}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="cashier">Cashier</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="shop-id">Shop ID</Label>
-                <Select onValueChange={(value) => setProfileShopId(value)} defaultValue={profileShopId}>
+                <Select onValueChange={(value) => setProfileShopId(value)} value={profileShopId}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select a shop" />
                   </SelectTrigger>
