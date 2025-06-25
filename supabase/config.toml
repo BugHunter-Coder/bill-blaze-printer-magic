@@ -1,1 +1,30 @@
-project_id = "mkosolisgvvukreooren"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+jwt_secret = "super-secret-jwt-token-with-at-least-32-characters-long"
+disable_signup = false
+external_email_enabled = true
+external_phone_enabled = true
+external_sms_enabled = true
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[functions.ai-inventory-assistant]
+verify_jwt = true
