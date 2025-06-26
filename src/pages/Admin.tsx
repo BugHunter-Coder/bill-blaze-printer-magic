@@ -33,17 +33,15 @@ const Admin = () => {
       console.log('Checking admin access for user:', user?.email);
       console.log('Current profile:', profile);
       
-      // Enhanced admin check - multiple ways to verify admin access
-      const isAdminUser = 
-        profile?.role === 'admin' || 
+      // Strict admin check - ONLY specific system admin emails, NOT shop owners
+      const isSystemAdmin = 
         user?.email === 'admin@billblaze.com' ||
-        user?.email === 'harjot@iprofit.in' ||
-        user?.email?.toLowerCase().includes('admin');
+        user?.email === 'harjot@iprofit.in';
       
-      console.log('Admin check result:', isAdminUser);
-      setIsAdmin(isAdminUser);
+      console.log('System admin check result:', isSystemAdmin);
+      setIsAdmin(isSystemAdmin);
       
-      if (isAdminUser) {
+      if (isSystemAdmin) {
         await fetchShops();
       } else {
         setLoadingShops(false);
@@ -192,9 +190,9 @@ const Admin = () => {
           <CardContent>
             <Alert>
               <AlertDescription>
-                You don't have admin privileges to access this panel. Your email: {user.email}
+                You don't have system admin privileges to access this panel. Your email: {user.email}
                 <br />
-                Your role: {profile?.role || 'No role assigned'}
+                This panel is only for system administrators, not shop owners.
               </AlertDescription>
             </Alert>
             <div className="flex gap-2 mt-4">
@@ -221,11 +219,11 @@ const Admin = () => {
       <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-6">
         <div className="flex items-center space-x-4">
           <Settings className="h-8 w-8 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
+          <h1 className="text-2xl font-bold text-gray-900">System Admin Panel</h1>
         </div>
         <div className="flex items-center space-x-4">
           <Badge variant="outline" className="text-green-600">
-            Admin Access
+            System Admin
           </Badge>
           <span className="text-sm text-gray-600">Welcome, {profile?.full_name || user.email}</span>
           <Button onClick={() => navigate('/dashboard')} variant="outline" size="sm">

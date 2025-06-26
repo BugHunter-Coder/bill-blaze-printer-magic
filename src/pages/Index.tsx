@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,14 +16,13 @@ const Index = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Check if user should be redirected to admin panel
+  // Check if user should be redirected to admin panel - ONLY for system admins
   useEffect(() => {
     if (user && profile && !loading) {
-      const isAdmin = profile.role === 'admin' || 
-                     user.email === 'admin@billblaze.com' || 
-                     user.email === 'harjot@iprofit.in';
+      const isSystemAdmin = user.email === 'admin@billblaze.com' || 
+                           user.email === 'harjot@iprofit.in';
       
-      if (isAdmin) {
+      if (isSystemAdmin) {
         navigate('/admin');
         return;
       }

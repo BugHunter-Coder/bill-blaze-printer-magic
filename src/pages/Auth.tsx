@@ -22,12 +22,11 @@ const Auth = () => {
   }
 
   if (user) {
-    // Redirect based on user role
-    const isAdmin = profile?.role === 'admin' || 
-                   user.email === 'admin@billblaze.com' || 
-                   user.email === 'harjot@iprofit.in';
+    // Redirect based on user role - ONLY system admins go to admin panel
+    const isSystemAdmin = user.email === 'admin@billblaze.com' || 
+                         user.email === 'harjot@iprofit.in';
     
-    if (isAdmin) {
+    if (isSystemAdmin) {
       return <Navigate to="/admin" replace />;
     }
     return <Navigate to="/dashboard" replace />;
@@ -49,7 +48,7 @@ const Auth = () => {
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
-              <TabsTrigger value="admin">Admin</TabsTrigger>
+              <TabsTrigger value="admin">System Admin</TabsTrigger>
             </TabsList>
             
             <TabsContent value="signin">
