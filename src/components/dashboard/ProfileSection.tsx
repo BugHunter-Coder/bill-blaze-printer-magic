@@ -20,26 +20,47 @@ export const ProfileSection = ({ user, profile, shops, onUpdate, isUpdating }: P
   const [profileRole, setProfileRole] = useState<'admin' | 'cashier' | 'manager'>('admin');
   const [profileShopId, setProfileShopId] = useState('');
 
+  // Check if user is shop owner
+  const isShopOwner = shops.some(shop => shop.owner_id === user?.id);
+  const userOwnedShop = shops.find(shop => shop.owner_id === user?.id);
+
   useEffect(() => {
     if (user && profile) {
       setProfileFullName(profile.full_name || '');
-      // Set admin as default role for shop owners
-      setProfileRole(profile.role || 'admin');
-      setProfileShopId(profile.shop_id || '');
+      
+      // Set role based on shop ownership
+      if (isShopOwner) {
+        setProfileRole('admin'); // Shop owners are always admin
+      } else {
+        setProfileRole(profile.role || 'cashier');
+      }
+      
+      // Set shop ID - for shop owners, use their owned shop
+      if (isShopOwner && userOwnedShop) {
+        setProfileShopId(userOwnedShop.id);
+      } else {
+        setProfileShopId(profile.shop_id || '');
+      }
     }
-  }, [user, profile]);
+  }, [user, profile, isShopOwner, userOwnedShop]);
 
   const handleProfileUpdate = () => {
-    onUpdate({
+    const updateData: any = {
       full_name: profileFullName,
-      role: profileRole,
-      shop_id: profileShopId,
-    });
-  };
+    };
 
-  // Check if user is shop owner (should have admin role by default)
-  const isShopOwner = shops.some(shop => shop.owner_id === user?.id);
-  const userShop = shops.find(shop => shop.owner_id === user?.id);
+    // Only include role and shop_id for non-shop-owners
+    if (!isShopOwner) {
+      updateData.role = profileRole;
+      updateData.shop_id = profileShopId;
+    } else {
+      // Shop owners are always admin with their own shop
+      updateData.role = 'admin';
+      updateData.shop_id = userOwnedShop?.id;
+    }
+
+    onUpdate(updateData);
+  };
 
   return (
     <Card>
@@ -62,30 +83,43 @@ export const ProfileSection = ({ user, profile, shops, onUpdate, isUpdating }: P
           />
         </div>
         
-        <div className="space-y-2">
-          <Label htmlFor="role">Role</Label>
-          <Select 
-            onValueChange={(value: 'admin' | 'cashier' | 'manager') => setProfileRole(value)} 
-            value={profileRole}
-            disabled={isShopOwner} // Shop owners should always be admin
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a role" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
-              <SelectItem value="cashier">Cashier</SelectItem>
-            </SelectContent>
-          </Select>
-          {isShopOwner && (
-            <p className="text-xs text-gray-500">
-              As a shop owner, your role is automatically set to Admin
-            </p>
-          )}
-        </div>
+        {/* Show role selection only for non-shop-owners */}
+        {!isShopOwner && (
+          <div className="space-y-2">
+            <Label htmlFor="role">Role</Label>
+            <Select 
+              onValueChange={(value: 'admin' | 'cashier' | 'manager') => setProfileRole(value)} 
+              value={profileRole}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="manager">Manager</SelectItem>
+                <SelectItem value="cashier">Cashier</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
-        {/* Only show shop selection if user has shops to choose from and is not the owner */}
+        {/* Show role info for shop owners */}
+        {isShopOwner && (
+          <div className="space-y-2">
+            <Label>Role</Label>
+            <div className="p-3 bg-gray-50 rounded-md">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Administrator</span>
+                <Badge variant="default">Owner</Badge>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                As a shop owner, you have full administrative privileges
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Show shop assignment only if user has shops to choose from and is not the owner */}
         {shops.length > 0 && !isShopOwner && (
           <div className="space-y-2">
             <Label htmlFor="shop-id">Shop Assignment</Label>
@@ -103,23 +137,26 @@ export const ProfileSection = ({ user, profile, shops, onUpdate, isUpdating }: P
         )}
 
         {/* Show current shop info for shop owners */}
-        {isShopOwner && userShop && (
+        {isShopOwner && userOwnedShop && (
           <div className="space-y-2">
             <Label>Your Shop</Label>
             <div className="p-3 bg-gray-50 rounded-md">
-              <div className="font-medium">{userShop.name}</div>
+              <div className="font-medium">{userOwnedShop.name}</div>
               <div className="text-sm text-gray-600">
-                {userShop.address || 'No address set'}
+                {userOwnedShop.address || 'No address set'}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Shop ID: {userOwnedShop.id}
               </div>
             </div>
           </div>
         )}
 
-        {/* Show message if no shops exist */}
-        {shops.length === 0 && (
+        {/* Show message if no shops exist and user is not a shop owner */}
+        {shops.length === 0 && !isShopOwner && (
           <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
             <p className="text-sm text-yellow-800">
-              No shops available. Create a shop first to assign roles.
+              No shops available. Create a shop first or ask a shop owner to assign you to their shop.
             </p>
           </div>
         )}
