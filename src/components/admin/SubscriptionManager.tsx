@@ -27,6 +27,29 @@ interface SubscriptionData {
   stripeCustomerId: string | null;
 }
 
+interface ProfileWithEmail {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: 'admin' | 'cashier' | 'manager' | null;
+  shop_id: string | null;
+  is_active: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+interface SubscriberRecord {
+  id: string;
+  user_id: string | null;
+  email: string;
+  stripe_customer_id: string | null;
+  subscribed: boolean;
+  subscription_tier: string | null;
+  subscription_end: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const SubscriptionManager = ({ shops }: SubscriptionManagerProps) => {
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,29 +68,33 @@ export const SubscriptionManager = ({ shops }: SubscriptionManagerProps) => {
       const subscriptionData: SubscriptionData[] = [];
 
       for (const shop of shops) {
-        // Get owner profile
+        // Get owner profile with email
         const { data: ownerProfile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', shop.owner_id)
           .single();
 
+        const profileWithEmail = ownerProfile as ProfileWithEmail;
+
         // Check if there's a subscription record
         const { data: subscriber } = await supabase
           .from('subscribers')
           .select('*')
-          .eq('email', ownerProfile?.email || '')
+          .eq('email', profileWithEmail?.email || '')
           .single();
+
+        const subscriberRecord = subscriber as SubscriberRecord;
 
         subscriptionData.push({
           shopId: shop.id,
           shopName: shop.name,
           ownerId: shop.owner_id || '',
-          ownerEmail: ownerProfile?.email || '',
-          subscriptionStatus: subscriber?.subscribed ? 'active' : 'inactive',
-          subscriptionTier: subscriber?.subscription_tier || 'basic',
-          subscriptionEnd: subscriber?.subscription_end,
-          stripeCustomerId: subscriber?.stripe_customer_id,
+          ownerEmail: profileWithEmail?.email || '',
+          subscriptionStatus: subscriberRecord?.subscribed ? 'active' : 'inactive',
+          subscriptionTier: (subscriberRecord?.subscription_tier as 'basic' | 'premium' | 'enterprise') || 'basic',
+          subscriptionEnd: subscriberRecord?.subscription_end,
+          stripeCustomerId: subscriberRecord?.stripe_customer_id,
         });
       }
 
