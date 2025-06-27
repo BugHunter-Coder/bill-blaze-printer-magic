@@ -1,12 +1,15 @@
+
 import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
 import Header from '@/components/Header';
 import { ShopsSection } from '@/components/dashboard/ShopsSection';
 import { ProfileSection } from '@/components/dashboard/ProfileSection';
 import { CreateShopSection } from '@/components/dashboard/CreateShopSection';
+import { Store, ArrowRight } from 'lucide-react';
 
 const Index = () => {
   const { user, profile, loading, updateProfile } = useAuth();
@@ -119,6 +122,28 @@ const Index = () => {
       />
       
       <div className="p-6">
+        {/* Quick Access to POS */}
+        {profile?.shop_id && (
+          <div className="mb-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Store className="h-8 w-8 text-blue-600" />
+                <div>
+                  <h3 className="text-lg font-semibold text-blue-900">Ready to start selling?</h3>
+                  <p className="text-blue-700">Access your point of sale system and manage your shop.</p>
+                </div>
+              </div>
+              <Button
+                onClick={() => navigate('/pos')}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                Go to POS
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+        )}
+        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ShopsSection 
             shops={shops}

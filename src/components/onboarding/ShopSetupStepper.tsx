@@ -1,6 +1,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,7 @@ interface ShopSetupStepperProps {
 
 const ShopSetupStepper = ({ onShopCreated }: ShopSetupStepperProps) => {
   const { user, refreshProfile } = useAuth();
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [shopData, setShopData] = useState({
@@ -82,6 +84,9 @@ const ShopSetupStepper = ({ onShopCreated }: ShopSetupStepperProps) => {
       toast.success('Shop created successfully!');
       await refreshProfile();
       onShopCreated();
+      
+      // Redirect to POS screen instead of calling onShopCreated
+      navigate('/pos');
     } catch (error: any) {
       console.error('Error creating shop:', error);
       toast.error(error.message || 'Failed to create shop');
@@ -282,7 +287,7 @@ const ShopSetupStepper = ({ onShopCreated }: ShopSetupStepperProps) => {
           <div className="mb-8">
             <div className="flex items-center mb-4">
               <Badge variant="outline" className="mr-2">
-                Step {currentStep} of {steps.length}
+                Step {currentStep} of 4
               </Badge>
               <h3 className="text-lg font-semibold">
                 {steps[currentStep - 1]?.title}
@@ -295,7 +300,7 @@ const ShopSetupStepper = ({ onShopCreated }: ShopSetupStepperProps) => {
           <div className="flex justify-between">
             <Button
               variant="outline"
-              onClick={handlePrevious}
+              onClick={() => setCurrentStep(currentStep - 1)}
               disabled={currentStep === 1}
             >
               Previous
@@ -303,7 +308,7 @@ const ShopSetupStepper = ({ onShopCreated }: ShopSetupStepperProps) => {
             
             {currentStep < 4 ? (
               <Button
-                onClick={handleNext}
+                onClick={() => setCurrentStep(currentStep + 1)}
                 disabled={!isStepValid()}
               >
                 Next
@@ -313,7 +318,7 @@ const ShopSetupStepper = ({ onShopCreated }: ShopSetupStepperProps) => {
                 onClick={handleSubmit}
                 disabled={isLoading || !isStepValid()}
               >
-                {isLoading ? 'Creating Shop...' : 'Create Shop'}
+                {isLoading ? 'Creating Shop...' : 'Create Shop & Go to POS'}
               </Button>
             )}
           </div>
