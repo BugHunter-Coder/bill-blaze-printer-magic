@@ -1,14 +1,25 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>bill-blaze-printer-magic</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
+    <title>BillBlaze POS - Point of Sale System</title>
+    <meta name="description" content="Simple Point of Sale System with Bluetooth Printing Support" />
+    <meta name="author" content="BillBlaze" />
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="BillBlaze POS" />
+    
+    <!-- Permissions Policy for Bluetooth -->
+    <meta http-equiv="Permissions-Policy" content="bluetooth=*, camera=*, microphone=*" />
 
-    <meta property="og:title" content="bill-blaze-printer-magic" />
-    <meta property="og:description" content="Lovable Generated Project" />
+    <meta property="og:title" content="BillBlaze POS" />
+    <meta property="og:description" content="Simple Point of Sale System with Bluetooth Printing Support" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
@@ -20,5 +31,20 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('SW registered: ', registration);
+            })
+            .catch(registrationError => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

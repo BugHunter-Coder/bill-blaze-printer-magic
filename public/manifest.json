@@ -1,0 +1,34 @@
+
+{
+  "name": "BillBlaze POS",
+  "short_name": "BillBlaze",
+  "description": "Point of Sale System with Bluetooth Printing",
+  "start_url": "/pos",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/placeholder.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/placeholder.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "permissions": [
+    "bluetooth"
+  ],
+  "features": [
+    "bluetooth"
+  ]
+}

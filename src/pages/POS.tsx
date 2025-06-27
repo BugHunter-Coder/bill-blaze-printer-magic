@@ -5,15 +5,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import Header from '@/components/Header';
+import { POSInterface } from '@/components/POSInterface';
 import { ShopManagement } from '@/components/ShopManagement';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Store, Settings, ArrowLeft } from 'lucide-react';
 
 const POS = () => {
   const { user, profile, loading, updateProfile } = useAuth();
   const [shop, setShop] = useState<any>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
   const [showManagement, setShowManagement] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -74,11 +73,6 @@ const POS = () => {
     }
   };
 
-  const addExpense = (expense: any) => {
-    // Handle expense addition
-    console.log('Adding expense:', expense);
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -104,100 +98,51 @@ const POS = () => {
         showBackToLanding={false}
       />
       
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-4">
-            <Store className="h-8 w-8 text-blue-600" />
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {shop?.name || 'Your Shop'} - POS System
-              </h1>
-              <p className="text-gray-600">Point of Sale & Management</p>
-            </div>
-          </div>
-          
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/dashboard')}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
-            </Button>
-            <Button
-              variant={showManagement ? "default" : "outline"}
-              onClick={() => setShowManagement(!showManagement)}
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              {showManagement ? 'Hide Management' : 'Shop Management'}
-            </Button>
+      <div className="flex items-center justify-between p-4 bg-white border-b">
+        <div className="flex items-center space-x-4">
+          <Store className="h-6 w-6 text-blue-600" />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">
+              {shop?.name || 'Your Shop'} - POS
+            </h1>
           </div>
         </div>
+        
+        <div className="flex space-x-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/dashboard')}
+            size="sm"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Dashboard
+          </Button>
+          <Button
+            variant={showManagement ? "default" : "outline"}
+            onClick={() => setShowManagement(!showManagement)}
+            size="sm"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            {showManagement ? 'Hide Management' : 'Management'}
+          </Button>
+        </div>
+      </div>
 
-        {showManagement ? (
+      {showManagement ? (
+        <div className="p-4">
           <ShopManagement
             shopDetails={shop}
             onShopUpdate={() => {
               // Refresh shop data
               console.log('Shop updated');
             }}
-            transactions={transactions}
-            onAddExpense={addExpense}
+            transactions={[]}
+            onAddExpense={() => {}}
           />
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Point of Sale</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <Store className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">POS Interface</h3>
-                  <p className="text-gray-500 mb-4">
-                    Your point of sale interface will be available here.
-                  </p>
-                  <Button onClick={() => setShowManagement(true)}>
-                    Access Shop Management
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  className="w-full justify-start" 
-                  variant="outline"
-                  onClick={() => setShowManagement(true)}
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Manage Products & Inventory
-                </Button>
-                <Button 
-                  className="w-full justify-start" 
-                  variant="outline"
-                  onClick={() => setShowManagement(true)}
-                >
-                  <Store className="h-4 w-4 mr-2" />
-                  View Sales Reports
-                </Button>
-                <Button 
-                  className="w-full justify-start" 
-                  variant="outline"
-                  onClick={() => navigate('/dashboard')}
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Dashboard
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        shop && <POSInterface shopDetails={shop} />
+      )}
     </div>
   );
 };
