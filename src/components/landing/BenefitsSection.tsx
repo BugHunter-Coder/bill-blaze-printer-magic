@@ -1,4 +1,3 @@
-
 import { CheckCircle } from "lucide-react";
 
 const benefits = [
@@ -11,6 +10,27 @@ const benefits = [
 ];
 
 export const BenefitsSection = () => {
+  // For now, use static data to avoid database issues
+  const staticStats = {
+    todayRevenue: 45230,
+    todayTransactions: 127,
+    totalProducts: 1247,
+    totalTransactions: 5000
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat('en-IN').format(num);
+  };
+
   return (
     <section className="py-20 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
       <div className="container mx-auto">
@@ -36,20 +56,33 @@ export const BenefitsSection = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-blue-100">Total Sales Today</span>
-                  <span className="text-2xl font-bold">₹45,230</span>
+                  <span className="text-2xl font-bold">
+                    {formatCurrency(staticStats.todayRevenue)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-blue-100">Orders Processed</span>
-                  <span className="text-2xl font-bold">127</span>
+                  <span className="text-2xl font-bold">
+                    {formatNumber(staticStats.todayTransactions)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-blue-100">Active Products</span>
-                  <span className="text-2xl font-bold">1,247</span>
+                  <span className="text-2xl font-bold">
+                    {formatNumber(staticStats.totalProducts)}
+                  </span>
                 </div>
                 <div className="h-2 bg-white/20 rounded-full mt-6">
-                  <div className="h-2 bg-green-400 rounded-full w-3/4"></div>
+                  <div 
+                    className="h-2 bg-green-400 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${Math.min((staticStats.todayTransactions / Math.max(staticStats.totalTransactions, 1)) * 100, 100)}%` 
+                    }}
+                  ></div>
                 </div>
-                <span className="text-sm text-blue-200">75% of daily target achieved</span>
+                <span className="text-sm text-blue-200">
+                  {`${Math.round((staticStats.todayTransactions / Math.max(staticStats.totalTransactions, 1)) * 100)}% of daily target achieved`}
+                </span>
               </div>
             </div>
           </div>

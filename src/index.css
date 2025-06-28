@@ -100,4 +100,13 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  html {
+    height: 100%;
+  }
 }

@@ -2,16 +2,30 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
+import Sidebar from '@/components/Sidebar';
+import React, { useState } from 'react';
 
 interface LayoutProps {
   children: React.ReactNode;
   showBackToLanding?: boolean;
+  onOpenManagement?: () => void;
+  isPrinterConnected?: boolean;
+  onPrinterConnectionChange?: (isConnected: boolean) => void;
+  onPrinterChange?: (device: BluetoothDevice | null) => void;
 }
 
-export const Layout = ({ children, showBackToLanding = false }: LayoutProps) => {
+export const Layout = ({ 
+  children, 
+  showBackToLanding = false, 
+  onOpenManagement,
+  isPrinterConnected = false,
+  onPrinterConnectionChange,
+  onPrinterChange,
+}: LayoutProps) => {
   const { user, updateProfile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -51,17 +65,24 @@ export const Layout = ({ children, showBackToLanding = false }: LayoutProps) => 
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        user={user}
-        onLogout={handleLogout}
-        onProfileUpdate={handleProfileUpdate}
-        showBackToLanding={showBackToLanding}
-        onBackToLanding={handleBackToLanding}
-      />
-      <main className="pt-16">
-        {children}
-      </main>
+    <div className="min-h-screen bg-gray-50 flex flex-row">
+      <Sidebar isCollapsed={isCollapsed} onToggle={() => setIsCollapsed((v) => !v)} />
+      <div className="flex-1 flex flex-col min-h-screen">
+        <Header
+          user={user}
+          onLogout={handleLogout}
+          onProfileUpdate={handleProfileUpdate}
+          showBackToLanding={showBackToLanding}
+          onBackToLanding={handleBackToLanding}
+          onOpenManagement={onOpenManagement}
+          isPrinterConnected={isPrinterConnected}
+          onPrinterConnectionChange={onPrinterConnectionChange}
+          onPrinterChange={onPrinterChange}
+        />
+        <main className="flex-1">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }; 

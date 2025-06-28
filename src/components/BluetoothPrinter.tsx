@@ -39,8 +39,8 @@ interface BluetoothPrinterProps {
   shopDetails: Shop;
 }
 
-export const BluetoothPrinter = ({
-  isConnected: externalIsConnected,
+export const BluetoothPrinter = ({ 
+  isConnected: externalIsConnected, 
   onConnectionChange: externalOnConnectionChange,
   onPrinterChange,
   cart,
@@ -266,7 +266,7 @@ export const BluetoothPrinter = ({
       }
       
       // Fallback to manual device selection
-      toast({ 
+      toast({
         title: 'Select Printer', 
         description: `Please select ${storedPrinter.name} from the device list` 
       });
@@ -291,8 +291,8 @@ export const BluetoothPrinter = ({
             name: dev.name || storedPrinter.name,
             timestamp: Date.now()
           });
-          
-          toast({ 
+    
+    toast({
             title: 'Reconnected', 
             description: `Connected to ${dev.name || storedPrinter.name}` 
           });
@@ -444,23 +444,61 @@ export const BluetoothPrinter = ({
 
   if (isIOS) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Apple className="h-5 w-5 mr-2 text-gray-400" />
+      <Card className="m-2 mt-1 h-full flex flex-col">
+        <CardHeader className="pb-2 flex-shrink-0">
+          <CardTitle className="flex items-center text-sm">
+            <Apple className="h-4 w-4 mr-2 text-gray-400" />
             iOS Printing
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
+        <CardContent className="flex-1 flex flex-col space-y-3 p-3">
+          <Alert className="py-2 flex-shrink-0">
+            <AlertCircle className="h-3 w-3" />
+            <AlertDescription className="text-xs">
               Web Bluetooth isn't supported on iOS—use Share/Download below.
             </AlertDescription>
           </Alert>
-          <div className="grid gap-2">
-            <Button onClick={shareReceipt}>Share Receipt</Button>
-            <Button onClick={downloadReceipt}>Download Receipt</Button>
+          <div className="grid gap-2 flex-shrink-0">
+            <Button onClick={shareReceipt} className="h-8 text-xs">Share Receipt</Button>
+            <Button onClick={downloadReceipt} className="h-8 text-xs">Download Receipt</Button>
+          </div>
+          <div className="border-t pt-3 space-y-2 flex-1 flex flex-col min-h-0">
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={isDirectBilling}
+                onChange={(e) => setIsDirectBilling(e.target.checked)}
+                id="directBillingIOS"
+              />
+              <label htmlFor="directBillingIOS" className="text-xs">
+                Direct billing
+              </label>
+            </div>
+
+            {isDirectBilling && (
+              <input
+                type="number"
+                value={directAmount}
+                onChange={(e) => setDirectAmount(e.target.value)}
+                placeholder="Custom amount"
+                className="w-full p-2 border rounded text-xs flex-shrink-0"
+                step="0.01"
+              />
+            )}
+
+            <div className="flex-1 flex items-end">
+              <Button 
+                onClick={handleCompleteOrder} 
+                className="w-full h-12 md:h-14 text-base md:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+                disabled={
+                  (!cart.length && !isDirectBilling) ||
+                  (isDirectBilling && !directAmount)
+                }
+              >
+                <CreditCard className="h-5 w-5 md:h-6 md:w-6 mr-2" /> 
+                {cart.length > 0 ? `Complete Order - ₹${(total + (total * (shopDetails?.tax_rate || 0))).toFixed(2)}` : 'Complete Order'}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -469,23 +507,61 @@ export const BluetoothPrinter = ({
 
   if (!bluetoothSupported) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <AlertCircle className="h-5 w-5 mr-2 text-red-500" />
+      <Card className="m-2 mt-1 h-full flex flex-col">
+        <CardHeader className="pb-2 flex-shrink-0">
+          <CardTitle className="flex items-center text-sm">
+            <AlertCircle className="h-4 w-4 mr-2 text-red-500" />
             Bluetooth Not Available
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
+        <CardContent className="flex-1 flex flex-col space-y-3 p-3">
+          <Alert className="py-2 flex-shrink-0">
+            <AlertCircle className="h-3 w-3" />
+            <AlertDescription className="text-xs">
               Switch to Chrome/Edge or use Share/Download.
             </AlertDescription>
           </Alert>
-          <div className="grid gap-2">
-            <Button onClick={shareReceipt}>Share Receipt</Button>
-            <Button onClick={downloadReceipt}>Download Receipt</Button>
+          <div className="grid gap-2 flex-shrink-0">
+            <Button onClick={shareReceipt} className="h-8 text-xs">Share Receipt</Button>
+            <Button onClick={downloadReceipt} className="h-8 text-xs">Download Receipt</Button>
+          </div>
+          <div className="border-t pt-3 space-y-2 flex-1 flex flex-col min-h-0">
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={isDirectBilling}
+                onChange={(e) => setIsDirectBilling(e.target.checked)}
+                id="directBillingNoBT"
+              />
+              <label htmlFor="directBillingNoBT" className="text-xs">
+                Direct billing
+              </label>
+            </div>
+
+            {isDirectBilling && (
+              <input
+                type="number"
+                value={directAmount}
+                onChange={(e) => setDirectAmount(e.target.value)}
+                placeholder="Custom amount"
+                className="w-full p-2 border rounded text-xs flex-shrink-0"
+                step="0.01"
+              />
+            )}
+
+            <div className="flex-1 flex items-end">
+              <Button 
+                onClick={handleCompleteOrder} 
+                className="w-full h-12 md:h-14 text-base md:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+                disabled={
+                  (!cart.length && !isDirectBilling) ||
+                  (isDirectBilling && !directAmount)
+                }
+              >
+                <CreditCard className="h-5 w-5 md:h-6 md:w-6 mr-2" /> 
+                {cart.length > 0 ? `Complete Order - ₹${(total + (total * (shopDetails?.tax_rate || 0))).toFixed(2)}` : 'Complete Order'}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -493,149 +569,97 @@ export const BluetoothPrinter = ({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          {externalIsConnected ? (
-            <BluetoothConnected className="h-5 w-5 mr-2 text-green-600" />
-          ) : (
-            <Bluetooth className="h-5 w-5 mr-2 text-gray-400" />
-          )}
-          Bluetooth Printer
-          {isMobile && <Smartphone className="h-4 w-4 ml-2 text-blue-500" />}
+    <Card className="m-2 lg:m-3 h-full flex flex-col bg-white border-0 shadow-none">
+      <CardHeader className="pb-2 lg:pb-3 flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-t-lg">
+        <CardTitle className="flex items-center text-sm lg:text-base">
+          <div className="bg-white/20 rounded-full p-1 lg:p-1.5 mr-2 lg:mr-3">
+            <CreditCard className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <div className="font-bold text-sm lg:text-base">Payment & Checkout</div>
+            <div className="text-xs lg:text-sm text-green-200">
+              Complete your order
+            </div>
+          </div>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="font-medium">
-            Status: {externalIsConnected ? 'Connected' : 'Not Connected'}
-          </p>
-          {externalIsConnected ? (
-            <CheckCircle className="h-5 w-5 text-green-600" />
-          ) : (
-            <AlertCircle className="h-5 w-5 text-gray-400" />
-          )}
-        </div>
-
-        {/* Stored Printer Info */}
-        {storedPrinter && !externalIsConnected && (
-          <Alert>
-            <History className="h-4 w-4" />
-            <AlertDescription>
-              Previously connected: <strong>{storedPrinter.name}</strong>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <div className="flex gap-2">
-          {!externalIsConnected ? (
-            <>
-              {storedPrinter && (
-                <Button
-                  onClick={connectToStoredPrinter}
-                  disabled={isConnecting}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  {isConnecting ? 'Reconnecting…' : 'Reconnect'}
-                </Button>
-              )}
-              <Button
-                onClick={connectToDevice}
-                disabled={isConnecting}
-                className="flex-1"
-              >
-                {isConnecting ? 'Connecting…' : 'Connect New'}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button onClick={printReceipt} className="flex-1">
-                Print Receipt
-              </Button>
-              <Button onClick={disconnect} variant="destructive" className="flex-1">
-                Disconnect
-              </Button>
-            </>
-          )}
-        </div>
-
-        {/* Clear stored printer button */}
-        {storedPrinter && !externalIsConnected && (
-          <Button
-            onClick={clearStoredPrinterData}
-            variant="ghost"
-            size="sm"
-            className="w-full"
-          >
-            Clear Stored Printer
-          </Button>
-        )}
-
-        <div className="grid grid-cols-3 gap-2">
-          <Button onClick={shareReceipt} variant="outline" size="sm">
-            <Share className="h-4 w-4 mr-1" /> Share
-          </Button>
-          <Button onClick={downloadReceipt} variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-1" /> Download
-          </Button>
-          <Button
-            onClick={() => navigator.clipboard.writeText(generateReceipt())}
-            variant="outline"
-            size="sm"
-          >
-            Copy
-          </Button>
-        </div>
-
-        <div className="border-t pt-4 space-y-3">
-          <label className="block text-sm font-medium">Payment Method</label>
-          <select
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value as any)}
-            className="w-full p-2 border rounded"
-          >
-            <option value="cash">Cash</option>
-            <option value="card">Card</option>
-            <option value="upi">UPI</option>
-            <option value="bank_transfer">Bank Transfer</option>
-            <option value="other">Other</option>
-          </select>
-
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={isDirectBilling}
-              onChange={(e) => setIsDirectBilling(e.target.checked)}
-              id="directBilling"
-            />
-            <label htmlFor="directBilling" className="text-sm">
-              Direct billing
-            </label>
+      
+      <CardContent className="flex-1 flex flex-col space-y-3 lg:space-y-4 p-3 lg:p-4 overflow-hidden">
+        {/* Payment Section */}
+        <div className="flex-1 flex flex-col min-h-0 bg-gradient-to-br from-green-50 to-blue-50 rounded-lg p-3 lg:p-4 border border-green-200">
+          <div className="flex items-center justify-between mb-3 lg:mb-4">
+            <h3 className="text-base lg:text-lg font-bold text-gray-900 flex items-center">
+              <svg className="w-4 h-4 lg:w-5 lg:h-5 mr-1 lg:mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              Payment Details
+            </h3>
+            <div className="bg-green-100 text-green-800 px-2 lg:px-3 py-1 lg:py-2 rounded-full text-xs lg:text-sm font-medium">
+              Secure Payment
+            </div>
           </div>
 
-          {isDirectBilling && (
-            <input
-              type="number"
-              value={directAmount}
-              onChange={(e) => setDirectAmount(e.target.value)}
-              placeholder="Custom amount"
-              className="w-full p-2 border rounded"
-              step="0.01"
-            />
-          )}
+          <div className="space-y-3 lg:space-y-4 flex-1 flex flex-col">
+            {/* Payment Method */}
+            <div className="flex-shrink-0">
+              <label className="block text-sm lg:text-base font-medium text-gray-700 mb-1 lg:mb-2">Payment Method</label>
+              <select 
+                value={paymentMethod} 
+                onChange={(e) => setPaymentMethod(e.target.value as any)}
+                className="w-full p-2 lg:p-3 border border-gray-300 rounded-lg text-sm lg:text-base focus:border-green-500 focus:ring-green-500 bg-white"
+              >
+                <option value="cash">💵 Cash</option>
+                <option value="card">💳 Card</option>
+                <option value="upi">📱 UPI</option>
+                <option value="bank_transfer">🏦 Bank Transfer</option>
+                <option value="other">📋 Other</option>
+              </select>
+            </div>
 
-          <Button
-            onClick={handleCompleteOrder}
-            className="w-full"
-            disabled={
-              (!cart.length && !isDirectBilling) ||
-              (isDirectBilling && !directAmount)
-            }
-          >
-            <CreditCard className="h-4 w-4 mr-2" /> Complete Order
-          </Button>
+            {/* Direct Billing Option */}
+            <div className="flex items-center space-x-2 lg:space-x-3 flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={isDirectBilling}
+                onChange={(e) => setIsDirectBilling(e.target.checked)}
+                id="directBilling"
+                className="w-4 h-4 lg:w-5 lg:h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+              />
+              <label htmlFor="directBilling" className="text-sm lg:text-base font-medium text-gray-700">
+                Direct billing (custom amount)
+              </label>
+            </div>
+
+            {/* Custom Amount Input */}
+            {isDirectBilling && (
+              <div className="flex-shrink-0">
+                <label className="block text-sm lg:text-base font-medium text-gray-700 mb-1 lg:mb-2">Custom Amount</label>
+                <input
+                  type="number"
+                  value={directAmount}
+                  onChange={(e) => setDirectAmount(e.target.value)}
+                  placeholder="Enter amount"
+                  className="w-full p-2 lg:p-3 border border-gray-300 rounded-lg text-sm lg:text-base focus:border-green-500 focus:ring-green-500"
+                  step="0.01"
+                />
+              </div>
+            )}
+
+            {/* Complete Order Button - Enhanced and Always Visible */}
+            <div className="flex-1 flex items-end pt-2 lg:pt-3">
+              <Button 
+                onClick={handleCompleteOrder} 
+                className="w-full h-12 lg:h-14 text-base lg:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
+                disabled={
+                  (!cart.length && !isDirectBilling) ||
+                  (isDirectBilling && !directAmount)
+                }
+              >
+                <CreditCard className="h-5 w-5 lg:h-6 lg:w-6 mr-2 lg:mr-3" /> 
+                {cart.length > 0 ? `Complete Order - ₹${(total + (total * (shopDetails?.tax_rate || 0))).toFixed(2)}` : 'Complete Order'}
+              </Button>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

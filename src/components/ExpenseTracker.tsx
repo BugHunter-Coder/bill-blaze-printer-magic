@@ -89,7 +89,7 @@ export const ExpenseTracker = ({ onAddExpense, transactions }: ExpenseTrackerPro
     .slice(0, 10);
 
   return (
-    <div className="space-y-6">
+    <div className="overflow-y-auto space-y-6 p-6">
       {/* Expense Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>

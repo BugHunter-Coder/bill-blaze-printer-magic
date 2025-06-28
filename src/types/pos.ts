@@ -12,8 +12,38 @@ export interface DatabaseProduct {
   min_stock_level: number;
   image_url?: string;
   is_active: boolean;
+  has_variants: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProductVariant {
+  id: string;
+  product_id: string;
+  name: string; // e.g., "Size", "Color", "Material"
+  value: string; // e.g., "Large", "Red", "Cotton"
+  price_modifier: number; // Additional cost for this variant
+  stock_quantity: number;
+  min_stock_level: number;
+  sku?: string;
+  barcode?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VariantOption {
+  id: string;
+  shop_id: string;
+  name: string; // e.g., "Size", "Color", "Material"
+  values: string[]; // Array of possible values
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductWithVariants extends DatabaseProduct {
+  variants?: ProductVariant[];
 }
 
 export interface Product {
@@ -25,10 +55,14 @@ export interface Product {
   description?: string;
   inStock: boolean;
   stock_quantity?: number;
+  has_variants?: boolean;
+  variants?: ProductVariant[];
+  selectedVariant?: ProductVariant;
 }
 
 export interface CartItem extends Product {
   quantity: number;
+  selectedVariant?: ProductVariant;
 }
 
 export interface Category {

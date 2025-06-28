@@ -256,7 +256,7 @@ export const SalesReport = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="overflow-y-auto space-y-6 p-6">
       {/* Company Info */}
       {selectedShop && (
         <Card>

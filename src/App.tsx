@@ -12,7 +12,9 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
 import POS from "./pages/POS";
+import AddProduct from "./pages/AddProduct";
 import NotFound from "./pages/NotFound";
+import ShopManagementPage from "./pages/ShopManagementPage";
 
 const queryClient = new QueryClient();
 
@@ -49,9 +51,23 @@ const App = () => (
                 path="/pos" 
                 element={
                   <ShopSetupRedirect>
-                    <Layout>
-                      <POS />
-                    </Layout>
+                    <POS />
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/products/add" 
+                element={
+                  <ShopSetupRedirect>
+                    <AddProduct />
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/shop" 
+                element={
+                  <ShopSetupRedirect>
+                    <ShopManagementPage />
                   </ShopSetupRedirect>
                 } 
               />
