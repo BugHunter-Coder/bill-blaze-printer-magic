@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -127,7 +126,7 @@ export const ShopsSection = ({ shops, selectedShop, setSelectedShop, setShops }:
               <div><strong>Phone:</strong> {selectedShop.phone || 'Not provided'}</div>
               <div><strong>Email:</strong> {selectedShop.email || 'Not provided'}</div>
               <div><strong>Tax Rate:</strong> {((selectedShop.tax_rate || 0) * 100).toFixed(2)}%</div>
-              <div><strong>Currency:</strong> {selectedShop.currency || 'USD'}</div>
+              <div><strong>Currency:</strong> {selectedShop.currency || 'INR'}</div>
             </div>
 
             <div className="flex items-center space-x-2">

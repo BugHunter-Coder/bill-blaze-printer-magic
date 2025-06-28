@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -29,8 +28,8 @@ const ShopSetupStepper = ({ onShopCreated }: ShopSetupStepperProps) => {
     phone: '',
     email: '',
     tax_id: '',
-    currency: 'USD',
-    tax_rate: 0.08,
+    currency: 'INR',
+    tax_rate: 0.18,
   });
 
   const steps = [

@@ -1,46 +1,32 @@
-
 import { useState, useEffect } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { useShop } from '@/hooks/useShop';
 import { useToast } from '@/hooks/use-toast';
-import Header from '@/components/Header';
 import { POSInterface } from '@/components/POSInterface';
 import { ShopManagement } from '@/components/ShopManagement';
 import { Button } from '@/components/ui/button';
-import { Store, Settings, ArrowLeft } from 'lucide-react';
+import { Settings, ArrowLeft, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
+
+type Shop = Database['public']['Tables']['shops']['Row'];
 
 const POS = () => {
   const { user, profile, loading, updateProfile } = useAuth();
-  const [shop, setShop] = useState<any>(null);
+  const { selectedShop, loading: shopLoading } = useShop();
   const [showManagement, setShowManagement] = useState(false);
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Check URL parameters to auto-open management
   useEffect(() => {
-    const fetchShopData = async () => {
-      if (!user || !profile?.shop_id) return;
-      
-      try {
-        const { data: shopData, error } = await supabase
-          .from('shops')
-          .select('*')
-          .eq('id', profile.shop_id)
-          .single();
-        
-        if (error) throw error;
-        setShop(shopData);
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: "Failed to fetch shop data: " + error.message,
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchShopData();
-  }, [user, profile]);
+    const management = searchParams.get('management');
+    if (management === 'true' || management === 'sales' || management === 'products' || management === 'expenses') {
+      setShowManagement(true);
+    }
+  }, [searchParams]);
 
   const handleLogout = async () => {
     try {
@@ -73,10 +59,13 @@ const POS = () => {
     }
   };
 
-  if (loading) {
+  if (loading || shopLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading...</span>
+        </div>
       </div>
     );
   }
@@ -85,25 +74,27 @@ const POS = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!profile?.shop_id) {
-    return <Navigate to="/dashboard" replace />;
+  if (!selectedShop) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-gray-600 mb-2">No company selected</p>
+          <p className="text-sm text-gray-500 mb-4">Please select a company from the header to use the POS system.</p>
+          <Button onClick={() => navigate('/dashboard')}>
+            Go to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        user={user}
-        onLogout={handleLogout}
-        onProfileUpdate={handleProfileUpdate}
-        showBackToLanding={false}
-      />
-      
-      <div className="flex items-center justify-between p-4 bg-white border-b">
+    <div className="p-4">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-4">
-          <Store className="h-6 w-6 text-blue-600" />
           <div>
             <h1 className="text-xl font-bold text-gray-900">
-              {shop?.name || 'Your Shop'} - POS
+              {selectedShop.name} - POS
             </h1>
           </div>
         </div>
@@ -129,19 +120,17 @@ const POS = () => {
       </div>
 
       {showManagement ? (
-        <div className="p-4">
-          <ShopManagement
-            shopDetails={shop}
-            onShopUpdate={() => {
-              // Refresh shop data
-              console.log('Shop updated');
-            }}
-            transactions={[]}
-            onAddExpense={() => {}}
-          />
-        </div>
+        <ShopManagement
+          onShopUpdate={() => {
+            // Refresh shop data
+            console.log('Shop updated');
+          }}
+          transactions={[]}
+          onAddExpense={() => {}}
+          defaultTab={searchParams.get('management') || 'products'}
+        />
       ) : (
-        shop && <POSInterface shopDetails={shop} />
+        <POSInterface shopDetails={selectedShop} />
       )}
     </div>
   );

@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useShop } from '@/hooks/useShop';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,32 +11,39 @@ import { DatabaseProduct, Product } from '@/types/pos';
 
 interface ProductCatalogProps {
   onAddToCart: (product: Product) => void;
+  onAddProduct?: () => void;
 }
 
-export const ProductCatalog = ({ onAddToCart }: ProductCatalogProps) => {
+export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProps) => {
   const { profile } = useAuth();
+  const { selectedShopId } = useShop();
   const [products, setProducts] = useState<DatabaseProduct[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (profile?.shop_id) {
+    if (selectedShopId) {
       fetchProducts();
     }
-  }, [profile]);
+  }, [selectedShopId]);
 
   const fetchProducts = async () => {
-    if (!profile?.shop_id) return;
+    if (!selectedShopId) return;
     
     try {
+      setLoading(true);
+      console.log('Fetching products for shop:', selectedShopId);
+      
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('shop_id', profile.shop_id)
+        .eq('shop_id', selectedShopId)
         .eq('is_active', true)
         .order('name');
       
       if (error) throw error;
+      
+      console.log('Fetched products:', data?.length, 'products for shop:', selectedShopId);
       setProducts(data || []);
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -45,7 +52,10 @@ export const ProductCatalog = ({ onAddToCart }: ProductCatalogProps) => {
     }
   };
 
-  const filteredProducts = products.filter(product =>
+  // Additional filter to ensure only products from the selected shop are shown
+  const shopFilteredProducts = products.filter(product => product.shop_id === selectedShopId);
+  
+  const filteredProducts = shopFilteredProducts.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -72,7 +82,15 @@ export const ProductCatalog = ({ onAddToCart }: ProductCatalogProps) => {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Products</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-gray-900">Products</h2>
+          {onAddProduct && (
+            <Button onClick={onAddProduct} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Product
+            </Button>
+          )}
+        </div>
         
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -89,9 +107,15 @@ export const ProductCatalog = ({ onAddToCart }: ProductCatalogProps) => {
         <div className="text-center py-12">
           <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No products found</h3>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-6">
             {searchTerm ? 'Try adjusting your search terms.' : 'Add products to get started.'}
           </p>
+          {onAddProduct && !searchTerm && (
+            <Button onClick={onAddProduct} size="lg">
+              <Plus className="h-5 w-5 mr-2" />
+              Add Your First Product
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -117,9 +141,9 @@ export const ProductCatalog = ({ onAddToCart }: ProductCatalogProps) => {
                 )}
                 
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-lg font-bold text-blue-600">
-                    ${product.price.toFixed(2)}
-                  </span>
+                  <p className="text-lg font-semibold text-gray-900">
+                    ₹{product.price.toFixed(2)}
+                  </p>
                   <Badge variant={product.stock_quantity > 0 ? "default" : "destructive"}>
                     Stock: {product.stock_quantity}
                   </Badge>

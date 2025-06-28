@@ -1,11 +1,30 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Bluetooth, BluetoothConnected, Smartphone, Wifi, AlertCircle, CheckCircle, CreditCard, Share, Download, Apple } from 'lucide-react';
+import {
+  Bluetooth,
+  BluetoothConnected,
+  Smartphone,
+  AlertCircle,
+  CheckCircle,
+  CreditCard,
+  Share,
+  Download,
+  Apple,
+  History,
+  RefreshCw,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CartItem, Shop } from '@/types/pos';
+import { storePrinter, getStoredPrinter, clearStoredPrinter, StoredPrinter } from '@/lib/utils';
+
+/* 🔤 Swap ₹→Rs + strip non-ASCII */
+const sanitizeForPrinter = (txt: string) =>
+  txt
+    .replace(/₹/g, 'Rs')
+    .normalize('NFKD')
+    .replace(/[^\x00-\x7F]/g, '');
 
 interface BluetoothPrinterProps {
   isConnected: boolean;
@@ -13,151 +32,392 @@ interface BluetoothPrinterProps {
   onPrinterChange: (device: BluetoothDevice | null) => void;
   cart: CartItem[];
   total: number;
-  onOrderComplete: (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => Promise<void>;
+  onOrderComplete: (
+    method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
+    directAmount?: number
+  ) => Promise<void>;
   shopDetails: Shop;
 }
 
-export const BluetoothPrinter = ({ 
-  isConnected: externalIsConnected, 
+export const BluetoothPrinter = ({
+  isConnected: externalIsConnected,
   onConnectionChange: externalOnConnectionChange,
   onPrinterChange,
   cart,
   total,
   onOrderComplete,
-  shopDetails
+  shopDetails,
 }: BluetoothPrinterProps) => {
   const [device, setDevice] = useState<BluetoothDevice | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [bluetoothSupported, setBluetoothSupported] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'>('cash');
-  const [directAmount, setDirectAmount] = useState<string>('');
+  const [storedPrinter, setStoredPrinter] = useState<StoredPrinter | null>(null);
+
+  const [paymentMethod, setPaymentMethod] =
+    useState<'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'>('cash');
+  const [directAmount, setDirectAmount] = useState('');
   const [isDirectBilling, setIsDirectBilling] = useState(false);
+
   const { toast } = useToast();
 
   useEffect(() => {
-    // Enhanced device detection
-    const userAgent = navigator.userAgent;
-    const checkMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-    const checkIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const ua = navigator.userAgent;
+    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      ua
+    );
+    const iOS =
+      /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    setIsMobile(mobile);
+    setIsIOS(iOS);
+    setBluetoothSupported('bluetooth' in navigator && !iOS);
     
-    setIsMobile(checkMobile);
-    setIsIOS(checkIOS);
+    // Load stored printer on component mount
+    const stored = getStoredPrinter();
+    setStoredPrinter(stored);
 
-    // Enhanced Bluetooth support detection
-    const checkBluetoothSupport = () => {
-      if ('bluetooth' in navigator && navigator.bluetooth) {
-        // Additional check for iOS limitations
-        if (checkIOS) {
-          // iOS has very limited Web Bluetooth support
-          setBluetoothSupported(false);
-          return false;
+    // Attempt auto-reconnect if possible
+    let pollingInterval: NodeJS.Timeout | null = null;
+    const tryAutoConnect = async () => {
+      if (stored && 'bluetooth' in navigator && (navigator.bluetooth as any).getDevices && !externalIsConnected) {
+        try {
+          const devices: BluetoothDevice[] = await (navigator.bluetooth as any).getDevices();
+          const match = devices.find((d) => d.id === stored.id);
+          if (match && !match.gatt?.connected) {
+            console.log('Attempting auto-reconnect to:', stored.name);
+            const srv = await match.gatt?.connect();
+            if (srv) {
+              setDevice(match);
+              externalOnConnectionChange(true);
+              onPrinterChange(match);
+              toast({ title: 'Auto-connected to printer', description: stored.name });
+              match.addEventListener('gattserverdisconnected', () => {
+                externalOnConnectionChange(false);
+                setDevice(null);
+                onPrinterChange(null);
+                toast({ title: 'Disconnected', variant: 'destructive' });
+              });
+            }
+          }
+        } catch (err: any) {
+          // Silent fail, fallback to next poll
+          console.log('Auto-reconnect failed, will retry later:', err.message);
         }
-        setBluetoothSupported(true);
-        return true;
       }
-      
-      setBluetoothSupported(false);
-      return false;
     };
 
-    checkBluetoothSupport();
-  }, []);
-
-  const generateReceipt = () => {
-    const finalTotal = isDirectBilling ? parseFloat(directAmount) || 0 : total;
-    const taxAmount = finalTotal * (shopDetails?.tax_rate || 0);
-    const grandTotal = finalTotal + taxAmount;
-
-    let receipt = `
-${shopDetails?.name || 'POS System'}
-${shopDetails?.address || ''}
-${shopDetails?.phone || ''}
-${shopDetails?.email || ''}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Receipt #: ${Date.now()}
-Date: ${new Date().toLocaleString()}
-Cashier: Staff
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ITEMS:
-`;
-
-    if (isDirectBilling) {
-      receipt += `Direct Billing         ₹${finalTotal.toFixed(2)}\n`;
-    } else {
-      cart.forEach(item => {
-        const itemTotal = item.price * item.quantity;
-        receipt += `${item.name}\n`;
-        receipt += `  ${item.quantity} × ₹${item.price.toFixed(2)} = ₹${itemTotal.toFixed(2)}\n`;
-      });
+    if (stored && 'bluetooth' in navigator && (navigator.bluetooth as any).getDevices) {
+      tryAutoConnect(); // initial attempt
+      pollingInterval = setInterval(tryAutoConnect, 15000); // poll every 15s
     }
 
-    receipt += `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Subtotal:           ₹${finalTotal.toFixed(2)}
-Tax (${((shopDetails?.tax_rate || 0) * 100).toFixed(1)}%):              ₹${taxAmount.toFixed(2)}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TOTAL:              ₹${grandTotal.toFixed(2)}
+    return () => {
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
+  }, []);
 
-Payment Method: ${paymentMethod.toUpperCase()}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  const center = (txt: string, w: number) => {
+    const pad = Math.max(0, Math.floor((w - txt.length) / 2));
+    return ' '.repeat(pad) + txt;
+  };
 
-Thank you for your business!
-Visit us again soon.
-    `;
+  const generateReceipt = (asciiOnly = false) => {
+    const WIDTH = 35;
+    const divider = '-'.repeat(WIDTH);
+    const sub = isDirectBilling ? parseFloat(directAmount) || 0 : total;
+    const tax = sub * (shopDetails?.tax_rate || 0);
+    const grand = sub + tax;
 
-    return receipt.trim();
+    let txt = `\n${center(shopDetails?.name || 'POS SYSTEM', WIDTH)}\n`;
+    if (shopDetails?.address) txt += center(shopDetails.address, WIDTH) + '\n';
+    if (shopDetails?.phone) txt += center(shopDetails.phone, WIDTH) + '\n';
+    txt += `\nDate : ${new Date().toLocaleString()}\n`;
+    txt += `Bill#: ${Date.now()}\n`;
+    txt += `Cashier: Staff\n\n`;
+
+    txt += `Item             QTY   Price    Total\n${divider}\n`;
+    cart.forEach((i) => {
+      const name = i.name.padEnd(16).slice(0, 16);
+      const qty = String(i.quantity).padStart(3);
+      const price = i.price.toFixed(2).padStart(7);
+      const tot = (i.price * i.quantity).toFixed(2).padStart(7);
+      txt += `${name}${qty} ${price} ${tot}\n`;
+    });
+
+    txt += `${divider}\n`;
+    txt += `Subtotal : ₹${sub.toFixed(2).padStart(10)}\n`;
+    txt += `Tax ${((shopDetails?.tax_rate || 0) * 100)
+      .toFixed(1)
+      .padStart(3)}% : ₹${tax.toFixed(2).padStart(8)}\n`;
+    txt += `${divider}\n`;
+    txt += `TOTAL    : ₹${grand.toFixed(2).padStart(10)}\n\n`;
+    txt += `${center('Thank you for your business!', WIDTH)}\n`;
+    txt += `${center('Visit us again soon.', WIDTH)}\n`;
+
+    return asciiOnly ? sanitizeForPrinter(txt) : txt;
+  };
+
+  const sendDataInChunks = async (
+    ch: BluetoothRemoteGATTCharacteristic,
+    data: Uint8Array,
+    chunk = 40
+  ) => {
+    for (let i = 0; i < data.length; i += chunk) {
+      await ch.writeValue(data.slice(i, i + chunk));
+    }
+  };
+
+  const forceEnglish = async (ch: BluetoothRemoteGATTCharacteristic) => {
+    const enc = new TextEncoder();
+    await ch.writeValue(enc.encode('\x1B@\x1BM\x01')); // init + Font B
+  };
+
+  const resetFont = async (ch: BluetoothRemoteGATTCharacteristic) => {
+    const enc = new TextEncoder();
+    await ch.writeValue(enc.encode('\x1BM\x00')); // Font A
+  };
+
+  const printReceipt = async () => {
+    if (!device || !externalIsConnected) {
+      return toast({ title: 'Not Connected', variant: 'destructive' });
+    }
+    try {
+      const ascii = generateReceipt(true);
+      console.log('Receipt:', ascii);
+
+      const server = await device.gatt?.connect();
+      if (!server) throw new Error('GATT connect failed');
+
+      const services = await server.getPrimaryServices();
+      let writeChar: BluetoothRemoteGATTCharacteristic | null = null;
+      for (const svc of services) {
+        const chars = await svc.getCharacteristics();
+        writeChar =
+          chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) ||
+          null;
+        if (writeChar) break;
+      }
+      if (!writeChar) throw new Error('No writable characteristic');
+
+      // Init printer, small font
+      await forceEnglish(writeChar);
+
+      const payload =
+        ascii.replace(/\n/g, '\r\n') + '\n\n\n'; // lines
+
+      const bytes = new TextEncoder().encode(payload);
+      await sendDataInChunks(writeChar, bytes);
+
+      // back to normal font & cut
+      await resetFont(writeChar);
+      await writeChar.writeValue(new TextEncoder().encode('\x1DVA\x0A'));
+
+      toast({ title: 'Printed', description: 'Receipt sent ✅' });
+    } catch (e: any) {
+      console.error(e);
+      toast({
+        title: 'Print Failed',
+        description: e.message || 'Unknown error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const connectToStoredPrinter = async () => {
+    if (!storedPrinter || !bluetoothSupported) return;
+    
+    setIsConnecting(true);
+    try {
+      const svcUUIDs = [
+        '000018f0-0000-1000-8000-00805f9b34fb',
+        '00001101-0000-1000-8000-00805f9b34fb',
+      ];
+      
+      // First try to get the device from previously allowed devices
+      if ((navigator.bluetooth as any).getDevices) {
+        try {
+          const devices: BluetoothDevice[] = await (navigator.bluetooth as any).getDevices();
+          const match = devices.find((d) => d.id === storedPrinter.id);
+          if (match) {
+            const srv = await match.gatt?.connect();
+            if (srv) {
+              setDevice(match);
+              externalOnConnectionChange(true);
+              onPrinterChange(match);
+              toast({ 
+                title: 'Reconnected', 
+                description: `Connected to ${storedPrinter.name}` 
+              });
+              
+              match.addEventListener('gattserverdisconnected', () => {
+                externalOnConnectionChange(false);
+                setDevice(null);
+                onPrinterChange(null);
+                toast({ title: 'Disconnected', variant: 'destructive' });
+              });
+              return;
+            }
+          }
+        } catch (err) {
+          console.log('Device not found in allowed devices, trying manual connection');
+        }
+      }
+      
+      // Fallback to manual device selection
+      toast({ 
+        title: 'Select Printer', 
+        description: `Please select ${storedPrinter.name} from the device list` 
+      });
+      
+      const dev = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: svcUUIDs,
+      });
+      
+      // Check if this is the stored device
+      if (dev.id === storedPrinter.id) {
+        const srv = await dev.gatt?.connect();
+        if (srv) {
+          setDevice(dev);
+          externalOnConnectionChange(true);
+          onPrinterChange(dev);
+          
+          // Update stored printer with fresh data
+          storePrinter(dev);
+          setStoredPrinter({
+            id: dev.id,
+            name: dev.name || storedPrinter.name,
+            timestamp: Date.now()
+          });
+          
+          toast({ 
+            title: 'Reconnected', 
+            description: `Connected to ${dev.name || storedPrinter.name}` 
+          });
+          
+          dev.addEventListener('gattserverdisconnected', () => {
+            externalOnConnectionChange(false);
+            setDevice(null);
+            onPrinterChange(null);
+            toast({ title: 'Disconnected', variant: 'destructive' });
+          });
+        }
+      } else {
+        toast({
+          title: 'Device Mismatch',
+          description: 'Selected device is not the previously connected printer',
+          variant: 'destructive',
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      if (err.name === 'NotFoundError') {
+        toast({
+          title: 'Printer Not Found',
+          description: 'The previously connected printer is not available. Make sure it\'s turned on and in range.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Reconnection Failed',
+          description: err.message || 'Could not reconnect to stored printer',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const connectToDevice = async () => {
+    if (!bluetoothSupported) {
+      return toast({
+        title: 'Bluetooth Not Supported',
+        description: 'Use a compatible browser or device.',
+        variant: 'destructive',
+      });
+    }
+    setIsConnecting(true);
+    try {
+      const svcUUIDs = [
+        '000018f0-0000-1000-8000-00805f9b34fb',
+        '00001101-0000-1000-8000-00805f9b34fb',
+      ];
+      const dev = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: svcUUIDs,
+      });
+      const srv = await dev.gatt?.connect();
+      if (srv) {
+        setDevice(dev);
+        externalOnConnectionChange(true);
+        onPrinterChange(dev);
+        
+        // Store the connected printer
+        storePrinter(dev);
+        setStoredPrinter({
+          id: dev.id,
+          name: dev.name || 'Unknown Printer',
+          timestamp: Date.now()
+        });
+        
+        toast({ title: 'Bluetooth Connected', description: dev.name || '' });
+        dev.addEventListener('gattserverdisconnected', () => {
+          externalOnConnectionChange(false);
+          setDevice(null);
+          onPrinterChange(null);
+          toast({ title: 'Disconnected', variant: 'destructive' });
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: 'Connection Failed',
+        description:
+          err.message ||
+          "Make sure you're on HTTPS, have location permission (Android), and printer is ready.",
+        variant: 'destructive',
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const disconnect = async () => {
+    if (device?.gatt?.connected) await device.gatt.disconnect();
+    externalOnConnectionChange(false);
+    setDevice(null);
+    onPrinterChange(null);
+    toast({ title: 'Disconnected' });
+  };
+
+  const clearStoredPrinterData = () => {
+    clearStoredPrinter();
+    setStoredPrinter(null);
+    toast({ title: 'Stored Printer Cleared' });
   };
 
   const shareReceipt = async () => {
-    const receiptText = generateReceipt();
-    
+    const txt = generateReceipt();
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: 'Receipt',
-          text: receiptText,
-        });
-        toast({
-          title: "Receipt Shared",
-          description: "Receipt shared successfully",
-        });
-      } catch (error) {
-        console.error('Error sharing:', error);
-        copyToClipboard(receiptText);
+        await navigator.share({ title: 'Receipt', text: txt });
+        toast({ title: 'Shared' });
+      } catch {
+        navigator.clipboard.writeText(txt);
+        toast({ title: 'Copied' });
       }
     } else {
-      copyToClipboard(receiptText);
+      navigator.clipboard.writeText(txt);
+      toast({ title: 'Copied' });
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast({
-        title: "Receipt Copied",
-        description: "Receipt copied to clipboard",
-      });
-    }).catch(() => {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      toast({
-        title: "Receipt Copied",
-        description: "Receipt copied to clipboard",
-      });
-    });
-  };
-
   const downloadReceipt = () => {
-    const receiptText = generateReceipt();
-    const blob = new Blob([receiptText], { type: 'text/plain' });
+    const txt = generateReceipt();
+    const blob = new Blob([txt], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -166,156 +426,22 @@ Visit us again soon.
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Receipt Downloaded",
-      description: "Receipt file downloaded",
-    });
-  };
-
-  const connectToDevice = async () => {
-    if (!bluetoothSupported) {
-      toast({
-        title: "Bluetooth Not Supported",
-        description: "Your browser doesn't support Web Bluetooth API.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsConnecting(true);
-
-    try {
-      const serviceUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '00001101-0000-1000-8000-00805f9b34fb',
-        '0000ff00-0000-1000-8000-00805f9b34fb',
-        '49535343-fe7d-4ae5-8fa9-9fafd205e455',
-      ];
-
-      const requestDevice = await navigator.bluetooth.requestDevice({
-        filters: [
-          { namePrefix: 'POS' },
-          { namePrefix: 'Thermal' },
-          { namePrefix: 'Receipt' },
-          { namePrefix: 'Printer' },
-          { namePrefix: 'BT' },
-          { services: serviceUUIDs }
-        ],
-        optionalServices: serviceUUIDs
-      });
-
-      console.log('Connecting to device:', requestDevice.name);
-      
-      const server = await requestDevice.gatt?.connect();
-      
-      if (server) {
-        setDevice(requestDevice);
-        externalOnConnectionChange(true);
-        onPrinterChange(requestDevice);
-        
-        toast({
-          title: "Bluetooth Connected",
-          description: `Connected to ${requestDevice.name || 'Unknown Device'}`,
-        });
-
-        requestDevice.addEventListener('gattserverdisconnected', () => {
-          externalOnConnectionChange(false);
-          setDevice(null);
-          onPrinterChange(null);
-          toast({
-            title: "Bluetooth Disconnected",
-            description: "Device has been disconnected",
-            variant: "destructive",
-          });
-        });
-      }
-
-    } catch (error: any) {
-      console.error('Bluetooth connection error:', error);
-      
-      let errorMessage = "Failed to connect to Bluetooth device.";
-      
-      if (error.name === 'NotFoundError') {
-        errorMessage = "No Bluetooth device was selected.";
-      } else if (error.name === 'SecurityError') {
-        errorMessage = "Bluetooth access was denied. Please allow permission and try again.";
-      } else if (error.name === 'NotSupportedError') {
-        errorMessage = "Bluetooth is not supported on this device or browser.";
-      }
-
-      toast({
-        title: "Connection Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const disconnect = async () => {
-    if (device && device.gatt?.connected) {
-      await device.gatt.disconnect();
-    }
-    externalOnConnectionChange(false);
-    setDevice(null);
-    onPrinterChange(null);
-    
-    toast({
-      title: "Disconnected",
-      description: "Bluetooth device disconnected successfully",
-    });
-  };
-
-  const printTest = async () => {
-    if (!device || !externalIsConnected) {
-      toast({
-        title: "Not Connected",
-        description: "Please connect to a printer first",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      toast({
-        title: "Print Test",
-        description: "Test print command sent to printer",
-      });
-    } catch (error) {
-      console.error('Print test error:', error);
-      toast({
-        title: "Print Failed",
-        description: "Failed to send test print",
-        variant: "destructive",
-      });
-    }
+    toast({ title: 'Downloaded' });
   };
 
   const handleCompleteOrder = async () => {
     try {
-      const amount = isDirectBilling ? parseFloat(directAmount) : undefined;
-      await onOrderComplete(paymentMethod, amount);
-      
-      toast({
-        title: "Order Completed",
-        description: "Transaction recorded successfully",
-      });
-
+      const amt = isDirectBilling ? parseFloat(directAmount) : undefined;
+      await onOrderComplete(paymentMethod, amt);
+      toast({ title: 'Order Completed' });
       setDirectAmount('');
       setIsDirectBilling(false);
-    } catch (error) {
-      console.error('Order completion error:', error);
-      toast({
-        title: "Order Failed",
-        description: "Failed to complete the order",
-        variant: "destructive",
-      });
+      if (externalIsConnected) await printReceipt();
+    } catch {
+      toast({ title: 'Order Failed', variant: 'destructive' });
     }
   };
 
-  // iOS-specific UI
   if (isIOS) {
     return (
       <Card>
@@ -327,107 +453,20 @@ Visit us again soon.
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
-            <Apple className="h-4 w-4" />
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>iOS Device Detected:</strong> Web Bluetooth is not supported on iOS. 
-              Use the alternative options below to handle receipts.
+              Web Bluetooth isn't supported on iOS—use Share/Download below.
             </AlertDescription>
           </Alert>
-
-          <div className="space-y-3">
-            <h4 className="font-semibold">Alternative Printing Options:</h4>
-            <div className="grid grid-cols-1 gap-2">
-              <Button onClick={shareReceipt} variant="outline" className="justify-start">
-                <Share className="h-4 w-4 mr-2" />
-                Share Receipt
-              </Button>
-              <Button onClick={downloadReceipt} variant="outline" className="justify-start">
-                <Download className="h-4 w-4 mr-2" />
-                Download Receipt
-              </Button>
-              <Button onClick={() => copyToClipboard(generateReceipt())} variant="outline" className="justify-start">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Copy Receipt Text
-              </Button>
-            </div>
-          </div>
-
-          {/* Payment section */}
-          <div className="border-t pt-4 space-y-4">
-            <h4 className="font-semibold">Complete Order</h4>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Payment Method</label>
-                <select 
-                  value={paymentMethod} 
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="upi">UPI</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="directBilling"
-                  checked={isDirectBilling}
-                  onChange={(e) => setIsDirectBilling(e.target.checked)}
-                />
-                <label htmlFor="directBilling" className="text-sm">Direct billing (custom amount)</label>
-              </div>
-
-              {isDirectBilling && (
-                <div>
-                  <label className="block text-sm font-medium mb-1">Amount</label>
-                  <input
-                    type="number"
-                    value={directAmount}
-                    onChange={(e) => setDirectAmount(e.target.value)}
-                    placeholder="Enter amount"
-                    className="w-full p-2 border rounded"
-                    step="0.01"
-                  />
-                </div>
-              )}
-
-              <div className="text-sm">
-                <p>Total: ₹{isDirectBilling ? directAmount || '0' : total.toFixed(2)}</p>
-                {shopDetails && (
-                  <p>Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%): ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * shopDetails.tax_rate).toFixed(2)}</p>
-                )}
-                <p className="font-semibold">
-                  Final Total: ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * (1 + (shopDetails?.tax_rate || 0))).toFixed(2)}
-                </p>
-              </div>
-
-              <Button 
-                onClick={handleCompleteOrder} 
-                className="w-full"
-                disabled={(!cart.length && !isDirectBilling) || (isDirectBilling && !directAmount)}
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Complete Order
-              </Button>
-            </div>
-          </div>
-
-          <div className="text-xs text-gray-500 space-y-1">
-            <p>• iOS doesn't support Web Bluetooth for security reasons</p>
-            <p>• Use WiFi printers or the share/download options above</p>
-            <p>• Consider using AirPrint compatible printers</p>
+          <div className="grid gap-2">
+            <Button onClick={shareReceipt}>Share Receipt</Button>
+            <Button onClick={downloadReceipt}>Download Receipt</Button>
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  // General mobile or non-Bluetooth supported devices
   if (!bluetoothSupported) {
     return (
       <Card>
@@ -441,101 +480,18 @@ Visit us again soon.
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              {isMobile 
-                ? "Bluetooth printing may not be fully supported on your mobile browser. Use the alternative options below."
-                : "Your browser doesn't support Web Bluetooth API. Please use Chrome, Edge, or another compatible browser."
-              }
+              Switch to Chrome/Edge or use Share/Download.
             </AlertDescription>
           </Alert>
-          
-          <div className="space-y-3">
-            <h4 className="font-semibold">Alternative Options:</h4>
-            <div className="grid grid-cols-1 gap-2">
-              <Button onClick={shareReceipt} variant="outline" className="justify-start">
-                <Share className="h-4 w-4 mr-2" />
-                Share Receipt
-              </Button>
-              <Button onClick={downloadReceipt} variant="outline" className="justify-start">
-                <Download className="h-4 w-4 mr-2" />
-                Download Receipt
-              </Button>
-              <Button onClick={() => copyToClipboard(generateReceipt())} variant="outline" className="justify-start">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Copy Receipt Text
-              </Button>
-            </div>
-          </div>
-
-          {/* Payment and checkout section */}
-          <div className="border-t pt-4 space-y-4">
-            <h4 className="font-semibold">Complete Order</h4>
-            
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">Payment Method</label>
-                <select 
-                  value={paymentMethod} 
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="upi">UPI</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="directBilling"
-                  checked={isDirectBilling}
-                  onChange={(e) => setIsDirectBilling(e.target.checked)}
-                />
-                <label htmlFor="directBilling" className="text-sm">Direct billing (custom amount)</label>
-              </div>
-
-              {isDirectBilling && (
-                <div>
-                  <label className="block text-sm font-medium mb-1">Amount</label>
-                  <input
-                    type="number"
-                    value={directAmount}
-                    onChange={(e) => setDirectAmount(e.target.value)}
-                    placeholder="Enter amount"
-                    className="w-full p-2 border rounded"
-                    step="0.01"
-                  />
-                </div>
-              )}
-
-              <div className="text-sm">
-                <p>Total: ₹{isDirectBilling ? directAmount || '0' : total.toFixed(2)}</p>
-                {shopDetails && (
-                  <p>Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%): ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * shopDetails.tax_rate).toFixed(2)}</p>
-                )}
-                <p className="font-semibold">
-                  Final Total: ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * (1 + (shopDetails?.tax_rate || 0))).toFixed(2)}
-                </p>
-              </div>
-
-              <Button 
-                onClick={handleCompleteOrder} 
-                className="w-full"
-                disabled={(!cart.length && !isDirectBilling) || (isDirectBilling && !directAmount)}
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Complete Order
-              </Button>
-            </div>
+          <div className="grid gap-2">
+            <Button onClick={shareReceipt}>Share Receipt</Button>
+            <Button onClick={downloadReceipt}>Download Receipt</Button>
           </div>
         </CardContent>
       </Card>
     );
   }
 
-  // Original Bluetooth-supported interface
   return (
     <Card>
       <CardHeader>
@@ -550,58 +506,53 @@ Visit us again soon.
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isMobile && (
+        <div className="flex items-center justify-between">
+          <p className="font-medium">
+            Status: {externalIsConnected ? 'Connected' : 'Not Connected'}
+          </p>
+          {externalIsConnected ? (
+            <CheckCircle className="h-5 w-5 text-green-600" />
+          ) : (
+            <AlertCircle className="h-5 w-5 text-gray-400" />
+          )}
+        </div>
+
+        {/* Stored Printer Info */}
+        {storedPrinter && !externalIsConnected && (
           <Alert>
-            <Smartphone className="h-4 w-4" />
+            <History className="h-4 w-4" />
             <AlertDescription>
-              Mobile device detected. Make sure Bluetooth and location services are enabled for best results.
+              Previously connected: <strong>{storedPrinter.name}</strong>
             </AlertDescription>
           </Alert>
         )}
 
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-medium">
-              Status: {externalIsConnected ? 'Connected' : 'Not Connected'}
-            </p>
-            {device && (
-              <p className="text-sm text-gray-600">
-                Device: {device.name || 'Unknown Device'}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center">
-            {externalIsConnected ? (
-              <CheckCircle className="h-5 w-5 text-green-600" />
-            ) : (
-              <AlertCircle className="h-5 w-5 text-gray-400" />
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex gap-2">
           {!externalIsConnected ? (
-            <Button 
-              onClick={connectToDevice} 
-              disabled={isConnecting}
-              className="flex-1"
-            >
-              {isConnecting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <Bluetooth className="h-4 w-4 mr-2" />
-                  Connect Printer
-                </>
+            <>
+              {storedPrinter && (
+                <Button
+                  onClick={connectToStoredPrinter}
+                  disabled={isConnecting}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  {isConnecting ? 'Reconnecting…' : 'Reconnect'}
+                </Button>
               )}
-            </Button>
+              <Button
+                onClick={connectToDevice}
+                disabled={isConnecting}
+                className="flex-1"
+              >
+                {isConnecting ? 'Connecting…' : 'Connect New'}
+              </Button>
+            </>
           ) : (
             <>
-              <Button onClick={printTest} variant="outline" className="flex-1">
-                Test Print
+              <Button onClick={printReceipt} className="flex-1">
+                Print Receipt
               </Button>
               <Button onClick={disconnect} variant="destructive" className="flex-1">
                 Disconnect
@@ -610,93 +561,81 @@ Visit us again soon.
           )}
         </div>
 
-        {/* Alternative options for Bluetooth-supported devices */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold">Alternative Options:</h4>
-          <div className="grid grid-cols-3 gap-2">
-            <Button onClick={shareReceipt} variant="outline" size="sm">
-              <Share className="h-4 w-4 mr-1" />
-              Share
-            </Button>
-            <Button onClick={downloadReceipt} variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-1" />
-              Download
-            </Button>
-            <Button onClick={() => copyToClipboard(generateReceipt())} variant="outline" size="sm">
-              Copy
-            </Button>
-          </div>
+        {/* Clear stored printer button */}
+        {storedPrinter && !externalIsConnected && (
+          <Button
+            onClick={clearStoredPrinterData}
+            variant="ghost"
+            size="sm"
+            className="w-full"
+          >
+            Clear Stored Printer
+          </Button>
+        )}
+
+        <div className="grid grid-cols-3 gap-2">
+          <Button onClick={shareReceipt} variant="outline" size="sm">
+            <Share className="h-4 w-4 mr-1" /> Share
+          </Button>
+          <Button onClick={downloadReceipt} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-1" /> Download
+          </Button>
+          <Button
+            onClick={() => navigator.clipboard.writeText(generateReceipt())}
+            variant="outline"
+            size="sm"
+          >
+            Copy
+          </Button>
         </div>
 
-        {/* Payment and checkout section */}
-        <div className="border-t pt-4 space-y-4">
-          <h4 className="font-semibold">Complete Order</h4>
-          
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium mb-1">Payment Method</label>
-              <select 
-                value={paymentMethod} 
-                onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="w-full p-2 border rounded"
-              >
-                <option value="cash">Cash</option>
-                <option value="card">Card</option>
-                <option value="upi">UPI</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+        <div className="border-t pt-4 space-y-3">
+          <label className="block text-sm font-medium">Payment Method</label>
+          <select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value as any)}
+            className="w-full p-2 border rounded"
+          >
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="upi">UPI</option>
+            <option value="bank_transfer">Bank Transfer</option>
+            <option value="other">Other</option>
+          </select>
 
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="directBilling"
-                checked={isDirectBilling}
-                onChange={(e) => setIsDirectBilling(e.target.checked)}
-              />
-              <label htmlFor="directBilling" className="text-sm">Direct billing (custom amount)</label>
-            </div>
-
-            {isDirectBilling && (
-              <div>
-                <label className="block text-sm font-medium mb-1">Amount</label>
-                <input
-                  type="number"
-                  value={directAmount}
-                  onChange={(e) => setDirectAmount(e.target.value)}
-                  placeholder="Enter amount"
-                  className="w-full p-2 border rounded"
-                  step="0.01"
-                />
-              </div>
-            )}
-
-            <div className="text-sm">
-              <p>Total: ₹{isDirectBilling ? directAmount || '0' : total.toFixed(2)}</p>
-              {shopDetails && (
-                <p>Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%): ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * shopDetails.tax_rate).toFixed(2)}</p>
-              )}
-              <p className="font-semibold">
-                Final Total: ₹{((isDirectBilling ? parseFloat(directAmount) || 0 : total) * (1 + (shopDetails?.tax_rate || 0))).toFixed(2)}
-              </p>
-            </div>
-
-            <Button 
-              onClick={handleCompleteOrder} 
-              className="w-full"
-              disabled={(!cart.length && !isDirectBilling) || (isDirectBilling && !directAmount)}
-            >
-              <CreditCard className="h-4 w-4 mr-2" />
-              Complete Order
-            </Button>
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={isDirectBilling}
+              onChange={(e) => setIsDirectBilling(e.target.checked)}
+              id="directBilling"
+            />
+            <label htmlFor="directBilling" className="text-sm">
+              Direct billing
+            </label>
           </div>
-        </div>
 
-        <div className="text-xs text-gray-500 space-y-1">
-          <p>• Make sure your printer is in pairing mode</p>
-          <p>• Compatible with thermal receipt printers</p>
-          {isMobile && <p>• On mobile: Enable Bluetooth and location permissions</p>}
+          {isDirectBilling && (
+            <input
+              type="number"
+              value={directAmount}
+              onChange={(e) => setDirectAmount(e.target.value)}
+              placeholder="Custom amount"
+              className="w-full p-2 border rounded"
+              step="0.01"
+            />
+          )}
+
+          <Button
+            onClick={handleCompleteOrder}
+            className="w-full"
+            disabled={
+              (!cart.length && !isDirectBilling) ||
+              (isDirectBilling && !directAmount)
+            }
+          >
+            <CreditCard className="h-4 w-4 mr-2" /> Complete Order
+          </Button>
         </div>
       </CardContent>
     </Card>

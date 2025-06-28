@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +8,11 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Calendar, DollarSign } from 'lucide-react';
 import { Expense, Transaction } from '@/types/pos';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useShop } from '@/hooks/useShop';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 interface ExpenseTrackerProps {
   onAddExpense: (expense: Expense) => void;
@@ -89,26 +93,21 @@ export const ExpenseTracker = ({ onAddExpense, transactions }: ExpenseTrackerPro
       {/* Expense Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Today's Expenses</p>
-                <p className="text-2xl font-bold text-red-600">${todayExpenses.toFixed(2)}</p>
-              </div>
-              <Calendar className="h-8 w-8 text-red-600" />
-            </div>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Today's Expenses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-red-600">₹{todayExpenses.toFixed(2)}</p>
           </CardContent>
         </Card>
-
+        
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Monthly Expenses</p>
-                <p className="text-2xl font-bold text-red-600">${monthlyExpenses.toFixed(2)}</p>
-              </div>
-              <DollarSign className="h-8 w-8 text-red-600" />
-            </div>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Monthly Expenses</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-red-600">₹{monthlyExpenses.toFixed(2)}</p>
+            <DollarSign className="h-8 w-8 text-red-600" />
           </CardContent>
         </Card>
       </div>
@@ -183,7 +182,7 @@ export const ExpenseTracker = ({ onAddExpense, transactions }: ExpenseTrackerPro
                     </p>
                   </div>
                   <Badge variant="destructive">
-                    -${expense.total_amount.toFixed(2)}
+                    -₹{expense.total_amount.toFixed(2)}
                   </Badge>
                 </div>
               ))

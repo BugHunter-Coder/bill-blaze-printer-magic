@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -190,7 +189,7 @@ export const AIInventoryAssistant = ({ shopData, products, transactions }: AIInv
                     <p className="text-sm text-gray-600 mb-2">{product.description}</p>
                     <div className="flex justify-between items-center">
                       <Badge variant="outline">{product.category}</Badge>
-                      <span className="font-bold text-green-600">${product.estimated_price}</span>
+                      <span className="font-bold text-green-600">₹{product.estimated_price}</span>
                     </div>
                     {product.reasoning && (
                       <p className="text-xs text-gray-500 mt-2">{product.reasoning}</p>

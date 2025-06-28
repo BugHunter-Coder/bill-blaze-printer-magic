@@ -154,3 +154,28 @@ export const PAYMENT_METHODS = [
   { value: 'bank_transfer', label: 'Bank Transfer' },
   { value: 'other', label: 'Other' },
 ] as const;
+
+export interface UserRole {
+  id: string;
+  name: string;
+  permissions: string[];
+  description: string;
+}
+
+export interface ShopUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  shop_id: string;
+  is_active: boolean;
+  created_at: string;
+  last_login?: string;
+}
+
+export interface CreateUserData {
+  email: string;
+  full_name: string;
+  role: string;
+  shop_id: string;
+}

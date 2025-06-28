@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useShop } from '@/hooks/useShop';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { DatabaseProduct } from '@/types/pos';
 
 export const ProductManagement = () => {
   const { profile } = useAuth();
+  const { selectedShopId } = useShop();
   const [products, setProducts] = useState<DatabaseProduct[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<DatabaseProduct | null>(null);
@@ -32,19 +33,20 @@ export const ProductManagement = () => {
   });
 
   useEffect(() => {
-    if (profile?.shop_id) {
+    if (selectedShopId) {
       fetchProducts();
     }
-  }, [profile]);
+  }, [selectedShopId]);
 
   const fetchProducts = async () => {
-    if (!profile?.shop_id) return;
+    if (!selectedShopId) return;
     
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('shop_id', profile.shop_id)
+        .eq('shop_id', selectedShopId)
         .order('name');
       
       if (error) throw error;
@@ -78,11 +80,11 @@ export const ProductManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.shop_id) return;
+    if (!selectedShopId) return;
 
     try {
       const productData = {
-        shop_id: profile.shop_id,
+        shop_id: selectedShopId,
         name: formData.name,
         description: formData.description || null,
         price: parseFloat(formData.price),
@@ -181,7 +183,7 @@ export const ProductManagement = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-gray-900">Product Management</h2>
-        <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
+        <Button onClick={() => setShowAddForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Product
         </Button>
@@ -305,12 +307,12 @@ export const ProductManagement = () => {
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
                   <span>Price:</span>
-                  <span className="font-semibold">${product.price.toFixed(2)}</span>
+                  <span className="font-semibold">₹{product.price.toFixed(2)}</span>
                 </div>
                 {product.cost_price && (
                   <div className="flex justify-between">
                     <span>Cost:</span>
-                    <span>${product.cost_price.toFixed(2)}</span>
+                    <span>₹{product.cost_price.toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
