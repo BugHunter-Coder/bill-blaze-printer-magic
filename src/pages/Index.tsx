@@ -20,7 +20,8 @@ import {
   Calendar,
   BarChart3,
   Activity,
-  Target
+  Target,
+  Plus
 } from 'lucide-react';
 import { SalesReport } from '@/components/SalesReport';
 import { ProductManagement } from '@/components/ProductManagement';

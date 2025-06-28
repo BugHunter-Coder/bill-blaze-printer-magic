@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ShopProvider } from "@/hooks/useShop";
 import { Layout } from "@/components/Layout";
+import { ShopSetupRedirect } from "@/components/ShopSetupRedirect";
 import Landing from "./pages/Landing";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -29,9 +30,11 @@ const App = () => (
               <Route 
                 path="/dashboard" 
                 element={
-                  <Layout>
-                    <Index />
-                  </Layout>
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <Index />
+                    </Layout>
+                  </ShopSetupRedirect>
                 } 
               />
               <Route 
@@ -45,9 +48,11 @@ const App = () => (
               <Route 
                 path="/pos" 
                 element={
-                  <Layout>
-                    <POS />
-                  </Layout>
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <POS />
+                    </Layout>
+                  </ShopSetupRedirect>
                 } 
               />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

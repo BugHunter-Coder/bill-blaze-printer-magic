@@ -1,4 +1,3 @@
-
 [api]
 enabled = true
 port = 54321
@@ -8,14 +7,10 @@ max_rows = 1000
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://localhost:3000"]
+site_url = "https://lovable.dev/projects/2c5cc1d1-998c-4fbd-8f92-d7bc54df746c"
+additional_redirect_urls = ["https://lovable.dev/projects/2c5cc1d1-998c-4fbd-8f92-d7bc54df746c", "http://localhost:3000", "https://localhost:3000"]
 jwt_expiry = 3600
 jwt_secret = "super-secret-jwt-token-with-at-least-32-characters-long"
-disable_signup = false
-external_email_enabled = true
-external_phone_enabled = true
-external_sms_enabled = true
 
 [db]
 port = 54322
