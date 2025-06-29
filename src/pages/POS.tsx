@@ -28,6 +28,7 @@ export default function POS() {
   const [printerOK, setPrinterOK] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(true);
   const [isBrowserFullScreen, setIsBrowserFullScreen] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
 
   /* mobile-only UI state */
   const [drawerOpen, setDrawerOpen] = useState(false); // pop-over visibility
@@ -185,6 +186,22 @@ export default function POS() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Check orientation on mount and resize
+  useEffect(() => {
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
+
   /* ─────────────────────── GUARDS ───────────────────────────── */
   if (loading || shopLoading)
     return (
@@ -206,173 +223,196 @@ export default function POS() {
 
   /* ─────────────────────── LAYOUT ───────────────────────────── */
   return (
-    <div className={`${isFullScreen ? 'fixed inset-0 z-50 bg-white' : 'min-h-screen'} flex flex-col bg-gradient-to-br from-gray-50 to-blue-50`}>
-      {/* Header - hidden in full screen mode */}
-      {!isFullScreen && (
-        <Header
-          user={user}
-          onLogout={async () => {
-            await supabase.auth.signOut();
-            navigate('/auth');
-          }}
-          onProfileUpdate={updateProfile}
-          onOpenManagement={() => {}}
-          isPrinterConnected={printerOK}
-          onPrinterConnectionChange={setPrinterOK}
-          onPrinterChange={() => {}}
-        />
+    <>
+      {/* Portrait Mode Warning */}
+      {isPortrait && (
+        <div className="fixed inset-0 z-[60] bg-gradient-to-br from-blue-600 to-blue-800 text-white flex items-center justify-center">
+          <div className="text-center p-6 max-w-sm">
+            <div className="text-6xl mb-4">📱</div>
+            <h2 className="text-2xl font-bold mb-2">Please Rotate Your Device</h2>
+            <p className="text-lg">This POS system works best in landscape mode</p>
+            <div className="mt-4 text-sm opacity-80">
+              Rotate your device horizontally for the best experience
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Full Screen Toggle Button */}
-      <div className={`${isFullScreen ? 'fixed top-4 right-4 z-50' : 'hidden'}`}>
-        <Button
-          onClick={toggleFullScreen}
-          variant="outline"
-          size="sm"
-          className="bg-white/90 backdrop-blur-sm shadow-lg"
-        >
-          <Minimize2 className="h-4 w-4 mr-2" />
-          Exit Full Screen
-        </Button>
-      </div>
-
-      {/* Main */}
-      <main
+      {/* Main POS Container */}
+      <div 
         className={`
-          flex-1 grid auto-rows-fr
-          ${isFullScreen ? 'h-screen' : ''}
-          md:[grid-template-columns:1fr_28rem]
-          lg:[grid-template-columns:1fr_34rem]
-          xl:[grid-template-columns:1fr_40rem]
-        `}
-        style={{ minHeight: isFullScreen ? '100vh' : `calc(100vh - ${HEADER}px)` }}
-      >
-        {/* Product grid */}
-        <section className="overflow-hidden">
-          <div
-            className={`
-              h-full overflow-y-auto
-              p-3 sm:p-4
-              grid gap-4
-              [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]
-              ${isFullScreen ? 'pt-16' : ''}
-            `}
-          >
-            <ProductCatalog onAddToCart={addToCart} onAddProduct={() => {}} />
-          </div>
-        </section>
-
-        {/* Cart drawer / side-panel */}
-        <aside
-          id="cartDrawer"
-          className="
-            bg-white shadow-xl border-l flex flex-col
-            md:sticky md:top-[64px] md:self-start
-            md:h-[calc(100vh-64px)]
-            md:overflow-hidden
-            fixed inset-x-0 bottom-0 h-[85vh] rounded-t-2xl
-            translate-y-full md:translate-y-0
-            transition-transform duration-300
-            data-[open='true']:translate-y-0
-            md:relative md:rounded-none
-          "
-          data-open={cart.length > 0 ? 'true' : undefined}
-        >
-          <div className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-gray-300 md:hidden" />
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            <Cart
-              items={cart}
-              onUpdateQuantity={updateQty}
-              onRemoveItem={id =>
-                setCart(prev =>
-                  prev.filter(
-                    i =>
-                      (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) !== id,
-                  ),
-                )
-              }
-              onClearCart={() => setCart([])}
-              total={total}
-              shopDetails={selectedShop}
-            />
-          </div>
-
-          <div className="border-t p-4">
-            <BluetoothPrinter
-              isConnected={printerOK}
-              onConnectionChange={setPrinterOK}
-              onPrinterChange={() => {}}
-              cart={cart}
-              total={total}
-              onOrderComplete={completeOrder}
-              shopDetails={selectedShop}
-            />
-          </div>
-        </aside>
-      </main>
-
-      {/* FAB */}
-      <button
-        onClick={() => setDrawerOpen(o => !o)}
-        className={`
-          md:hidden fixed bottom-4 right-4 z-30
-          h-14 w-14 rounded-full bg-blue-600 text-white
-          flex items-center justify-center shadow-lg
-          transition-transform duration-300
-          ${pulse ? 'animate-bounce' : ''}
+          ${isFullScreen ? 'fixed inset-0 z-50 bg-white' : 'min-h-screen'} 
+          flex flex-col bg-gradient-to-br from-gray-50 to-blue-50
+          ${isPortrait ? 'auto-rotate portrait' : 'auto-rotate landscape'}
         `}
       >
-        <ShoppingCart className="h-6 w-6" />
-        {cart.length > 0 && (
-          <span
-            className="
-              absolute -top-1.5 -right-1.5 flex h-6 w-6
-              items-center justify-center
-              rounded-full bg-red-600 text-xs font-medium
-            "
-          >
-            {cart.length}
-          </span>
+        {/* Header - hidden in full screen mode */}
+        {!isFullScreen && (
+          <Header
+            user={user}
+            onLogout={async () => {
+              await supabase.auth.signOut();
+              navigate('/auth');
+            }}
+            onProfileUpdate={updateProfile}
+            onOpenManagement={() => {}}
+            isPrinterConnected={printerOK}
+            onPrinterConnectionChange={setPrinterOK}
+            onPrinterChange={() => {}}
+          />
         )}
-      </button>
 
-      {/* Full Screen Toggle Button - Desktop */}
-      {!isFullScreen && (
-        <div className="fixed top-20 right-4 z-40 md:block hidden">
+        {/* Full Screen Toggle Button */}
+        <div className={`${isFullScreen ? 'fixed top-4 right-4 z-50' : 'hidden'}`}>
           <Button
             onClick={toggleFullScreen}
             variant="outline"
             size="sm"
             className="bg-white/90 backdrop-blur-sm shadow-lg"
           >
-            <Maximize2 className="h-4 w-4 mr-2" />
-            Full Screen
+            <Minimize2 className="h-4 w-4 mr-2" />
+            Exit Full Screen
           </Button>
         </div>
-      )}
 
-      {/* Pop-over mini cart */}
-      {/* <MobileCartPopover
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        cart={cart}
-        total={total}
-        onUpdateQty={updateQty}
-        onRemove={id =>
-          setCart(prev =>
-            prev.filter(
-              i =>
-                (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) !== id,
-            ),
-          )
-        }
-        onClear={() => setCart([])}
-        onGoCheckout={() => {
-          setDrawerOpen(false);
-          document.getElementById('cartDrawer')?.setAttribute('data-open', 'true');
-        }}
-      /> */}
-    </div>
+        {/* Main */}
+        <main
+          className={`
+            flex-1 grid auto-rows-fr
+            ${isFullScreen ? 'h-screen' : ''}
+            md:[grid-template-columns:1fr_28rem]
+            lg:[grid-template-columns:1fr_34rem]
+            xl:[grid-template-columns:1fr_40rem]
+          `}
+          style={{ minHeight: isFullScreen ? '100vh' : `calc(100vh - ${HEADER}px)` }}
+        >
+          {/* Product grid */}
+          <section className="overflow-hidden">
+            <div
+              className={`
+                h-full overflow-y-auto
+                p-3 sm:p-4
+                grid gap-4
+                [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]
+                ${isFullScreen ? 'pt-16' : ''}
+              `}
+            >
+              <ProductCatalog onAddToCart={addToCart} onAddProduct={() => {}} />
+            </div>
+          </section>
+
+          {/* Cart drawer / side-panel */}
+          <aside
+            id="cartDrawer"
+            className="
+              bg-white shadow-xl border-l flex flex-col
+              md:sticky md:top-[64px] md:self-start
+              md:h-[calc(100vh-64px)]
+              md:overflow-hidden
+              fixed inset-x-0 bottom-0 h-[85vh] rounded-t-2xl
+              translate-y-full md:translate-y-0
+              transition-transform duration-300
+              data-[open='true']:translate-y-0
+              md:relative md:rounded-none
+            "
+            data-open={cart.length > 0 ? 'true' : undefined}
+          >
+            <div className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-gray-300 md:hidden" />
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <Cart
+                items={cart}
+                onUpdateQuantity={updateQty}
+                onRemoveItem={id =>
+                  setCart(prev =>
+                    prev.filter(
+                      i =>
+                        (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) !== id,
+                    ),
+                  )
+                }
+                onClearCart={() => setCart([])}
+                total={total}
+                shopDetails={selectedShop}
+              />
+            </div>
+
+            <div className="border-t p-4">
+              <BluetoothPrinter
+                isConnected={printerOK}
+                onConnectionChange={setPrinterOK}
+                onPrinterChange={() => {}}
+                cart={cart}
+                total={total}
+                onOrderComplete={completeOrder}
+                shopDetails={selectedShop}
+              />
+            </div>
+          </aside>
+        </main>
+
+        {/* FAB */}
+        <button
+          onClick={() => setDrawerOpen(o => !o)}
+          className={`
+            md:hidden fixed bottom-4 right-4 z-30
+            h-14 w-14 rounded-full bg-blue-600 text-white
+            flex items-center justify-center shadow-lg
+            transition-transform duration-300
+            ${pulse ? 'animate-bounce' : ''}
+          `}
+        >
+          <ShoppingCart className="h-6 w-6" />
+          {cart.length > 0 && (
+            <span
+              className="
+                absolute -top-1.5 -right-1.5 flex h-6 w-6
+                items-center justify-center
+                rounded-full bg-red-600 text-xs font-medium
+              "
+            >
+              {cart.length}
+            </span>
+          )}
+        </button>
+
+        {/* Full Screen Toggle Button - Desktop */}
+        {!isFullScreen && (
+          <div className="fixed top-20 right-4 z-40 md:block hidden">
+            <Button
+              onClick={toggleFullScreen}
+              variant="outline"
+              size="sm"
+              className="bg-white/90 backdrop-blur-sm shadow-lg"
+            >
+              <Maximize2 className="h-4 w-4 mr-2" />
+              Full Screen
+            </Button>
+          </div>
+        )}
+
+        {/* Pop-over mini cart */}
+        {/* <MobileCartPopover
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          cart={cart}
+          total={total}
+          onUpdateQty={updateQty}
+          onRemove={id =>
+            setCart(prev =>
+              prev.filter(
+                i =>
+                  (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) !== id,
+              ),
+            )
+          }
+          onClear={() => setCart([])}
+          onGoCheckout={() => {
+            setDrawerOpen(false);
+            document.getElementById('cartDrawer')?.setAttribute('data-open', 'true');
+          }}
+        /> */}
+      </div>
+    </>
   );
 }

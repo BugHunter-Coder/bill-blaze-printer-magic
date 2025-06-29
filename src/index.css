@@ -110,3 +110,96 @@
     height: 100%;
   }
 }
+
+/* Landscape orientation styles for POS */
+@layer utilities {
+  /* Portrait mode detection */
+  @media (orientation: portrait) {
+    .portrait\:flex {
+      display: flex !important;
+    }
+    
+    .portrait\:hidden {
+      display: none !important;
+    }
+    
+    .portrait\:rotate-90 {
+      transform: rotate(90deg) !important;
+    }
+    
+    .portrait\:origin-center {
+      transform-origin: center center !important;
+    }
+    
+    .portrait\:scale-75 {
+      transform: scale(0.75) !important;
+    }
+    
+    .portrait\:w-screen {
+      width: 100vw !important;
+    }
+    
+    .portrait\:h-screen {
+      height: 100vh !important;
+    }
+  }
+
+  /* Landscape mode detection */
+  @media (orientation: landscape) {
+    .landscape\:flex {
+      display: flex !important;
+    }
+    
+    .landscape\:hidden {
+      display: none !important;
+    }
+    
+    .landscape\:rotate-0 {
+      transform: rotate(0deg) !important;
+    }
+    
+    .landscape\:scale-100 {
+      transform: scale(1) !important;
+    }
+  }
+
+  /* Force landscape orientation for POS */
+  .pos-landscape {
+    min-height: 100vh;
+    min-width: 100vw;
+  }
+
+  /* Portrait warning overlay */
+  .portrait-warning {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    color: white;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* Auto-rotate container for portrait devices */
+  .auto-rotate {
+    transition: transform 0.3s ease;
+  }
+
+  .auto-rotate.portrait {
+    transform: rotate(90deg) scale(0.75);
+    transform-origin: center center;
+    width: 100vh;
+    height: 100vw;
+  }
+
+  .auto-rotate.landscape {
+    transform: rotate(0deg) scale(1);
+    width: 100vw;
+    height: 100vh;
+  }
+}
