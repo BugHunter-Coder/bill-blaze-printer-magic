@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/hooks/useShop';
@@ -9,7 +9,7 @@ import { ProductCatalog } from '@/components/ProductCatalog';
 import { Cart } from '@/components/Cart';
 import { BluetoothPrinter } from '@/components/BluetoothPrinter';
 import Header from '@/components/Header';
-import { Loader2, ShoppingCart } from 'lucide-react';
+import { Loader2, ShoppingCart, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import { Product, CartItem } from '@/types/pos';
@@ -26,6 +26,8 @@ export default function POS() {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [printerOK, setPrinterOK] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(true);
+  const [isBrowserFullScreen, setIsBrowserFullScreen] = useState(false);
 
   /* mobile-only UI state */
   const [drawerOpen, setDrawerOpen] = useState(false); // pop-over visibility
@@ -121,6 +123,68 @@ export default function POS() {
     }
   };
 
+  /* ─────────────────────── FULL SCREEN TOGGLE ───────────────── */
+  const toggleFullScreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        // Enter full screen
+        await document.documentElement.requestFullscreen();
+        setIsBrowserFullScreen(true);
+        setIsFullScreen(true);
+      } else {
+        // Exit full screen
+        await document.exitFullscreen();
+        setIsBrowserFullScreen(false);
+        setIsFullScreen(false);
+      }
+    } catch (error) {
+      console.error('Full screen error:', error);
+      // Fallback to app-level full screen if browser full screen fails
+      setIsFullScreen(!isFullScreen);
+    }
+  };
+
+  // Handle full screen change events
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+      setIsBrowserFullScreen(!!document.fullscreenElement);
+      setIsFullScreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullScreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullScreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullScreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullScreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullScreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullScreenChange);
+    };
+  }, []);
+
+  // Auto-enter full screen on load
+  useEffect(() => {
+    const enterFullScreen = async () => {
+      try {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+          setIsBrowserFullScreen(true);
+          setIsFullScreen(true);
+        }
+      } catch (error) {
+        console.log('Auto full screen not supported or denied:', error);
+        // Keep app-level full screen as fallback
+        setIsFullScreen(true);
+      }
+    };
+
+    // Small delay to ensure page is loaded
+    const timer = setTimeout(enterFullScreen, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
   /* ─────────────────────── GUARDS ───────────────────────────── */
   if (loading || shopLoading)
     return (
@@ -142,40 +206,57 @@ export default function POS() {
 
   /* ─────────────────────── LAYOUT ───────────────────────────── */
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-blue-50">
-      {/* Header */}
-      <Header
-        user={user}
-        onLogout={async () => {
-          await supabase.auth.signOut();
-          navigate('/auth');
-        }}
-        onProfileUpdate={updateProfile}
-        onOpenManagement={() => {}}
-        isPrinterConnected={printerOK}
-        onPrinterConnectionChange={setPrinterOK}
-        onPrinterChange={() => {}}
-      />
+    <div className={`${isFullScreen ? 'fixed inset-0 z-50 bg-white' : 'min-h-screen'} flex flex-col bg-gradient-to-br from-gray-50 to-blue-50`}>
+      {/* Header - hidden in full screen mode */}
+      {!isFullScreen && (
+        <Header
+          user={user}
+          onLogout={async () => {
+            await supabase.auth.signOut();
+            navigate('/auth');
+          }}
+          onProfileUpdate={updateProfile}
+          onOpenManagement={() => {}}
+          isPrinterConnected={printerOK}
+          onPrinterConnectionChange={setPrinterOK}
+          onPrinterChange={() => {}}
+        />
+      )}
+
+      {/* Full Screen Toggle Button */}
+      <div className={`${isFullScreen ? 'fixed top-4 right-4 z-50' : 'hidden'}`}>
+        <Button
+          onClick={toggleFullScreen}
+          variant="outline"
+          size="sm"
+          className="bg-white/90 backdrop-blur-sm shadow-lg"
+        >
+          <Minimize2 className="h-4 w-4 mr-2" />
+          Exit Full Screen
+        </Button>
+      </div>
 
       {/* Main */}
       <main
-        className="
+        className={`
           flex-1 grid auto-rows-fr
+          ${isFullScreen ? 'h-screen' : ''}
           md:[grid-template-columns:1fr_28rem]
           lg:[grid-template-columns:1fr_34rem]
           xl:[grid-template-columns:1fr_40rem]
-        "
-        style={{ minHeight: `calc(100vh - ${HEADER}px)` }}
+        `}
+        style={{ minHeight: isFullScreen ? '100vh' : `calc(100vh - ${HEADER}px)` }}
       >
         {/* Product grid */}
         <section className="overflow-hidden">
           <div
-            className="
+            className={`
               h-full overflow-y-auto
               p-3 sm:p-4
               grid gap-4
               [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]
-            "
+              ${isFullScreen ? 'pt-16' : ''}
+            `}
           >
             <ProductCatalog onAddToCart={addToCart} onAddProduct={() => {}} />
           </div>
@@ -255,6 +336,21 @@ export default function POS() {
           </span>
         )}
       </button>
+
+      {/* Full Screen Toggle Button - Desktop */}
+      {!isFullScreen && (
+        <div className="fixed top-20 right-4 z-40 md:block hidden">
+          <Button
+            onClick={toggleFullScreen}
+            variant="outline"
+            size="sm"
+            className="bg-white/90 backdrop-blur-sm shadow-lg"
+          >
+            <Maximize2 className="h-4 w-4 mr-2" />
+            Full Screen
+          </Button>
+        </div>
+      )}
 
       {/* Pop-over mini cart */}
       {/* <MobileCartPopover
