@@ -118,6 +118,28 @@ export const BluetoothPrinter = ({
     };
   }, []);
 
+  // Sync connection state when device changes
+  useEffect(() => {
+    console.log('🔍 DEBUG: Device state changed:', { 
+      device: !!device, 
+      deviceName: device?.name,
+      deviceConnected: device?.gatt?.connected,
+      externalIsConnected 
+    });
+    
+    // If we have a device but external state is false, sync it
+    if (device && !externalIsConnected) {
+      console.log('🔍 DEBUG: Syncing connection state - device exists but external state is false');
+      externalOnConnectionChange(true);
+    }
+    
+    // If we don't have a device but external state is true, sync it
+    if (!device && externalIsConnected) {
+      console.log('🔍 DEBUG: Syncing connection state - no device but external state is true');
+      externalOnConnectionChange(false);
+    }
+  }, [device, externalIsConnected, externalOnConnectionChange]);
+
   const center = (txt: string, w: number) => {
     const pad = Math.max(0, Math.floor((w - txt.length) / 2));
     return ' '.repeat(pad) + txt;
@@ -194,9 +216,9 @@ export const BluetoothPrinter = ({
     console.log('🔍 DEBUG: Device state:', { device: !!device, deviceName: device?.name });
     console.log('🔍 DEBUG: Connection state:', { externalIsConnected, deviceConnected: device?.gatt?.connected });
     
-    if (!device || !externalIsConnected) {
-      console.error('❌ DEBUG: Print failed - not connected:', { device: !!device, externalIsConnected });
-      return toast({ title: 'Not Connected', variant: 'destructive' });
+    if (!device) {
+      console.error('❌ DEBUG: Print failed - no device');
+      return toast({ title: 'No Device', description: 'Please connect a printer first', variant: 'destructive' });
     }
     
     try {
@@ -253,6 +275,12 @@ export const BluetoothPrinter = ({
       await resetFont(writeChar);
       await writeChar.writeValue(new TextEncoder().encode('\x1DVA\x0A'));
       console.log('✅ DEBUG: Font reset and cut command sent');
+
+      // Update connection state if it was wrong
+      if (!externalIsConnected) {
+        console.log('🔍 DEBUG: Updating connection state after successful print');
+        externalOnConnectionChange(true);
+      }
 
       console.log('✅ DEBUG: Print completed successfully');
       toast({ title: 'Printed', description: 'Receipt sent ✅' });
@@ -533,11 +561,20 @@ export const BluetoothPrinter = ({
   // Simple test print function
   const testPrint = async () => {
     console.log('🧪 DEBUG: testPrint called');
-    if (!device || !externalIsConnected) {
-      console.error('❌ DEBUG: Test print failed - not connected');
-      return toast({ title: 'Not Connected', variant: 'destructive' });
+    console.log('🧪 DEBUG: Connection check:', {
+      externalIsConnected,
+      device: !!device,
+      deviceName: device?.name,
+      deviceConnected: device?.gatt?.connected,
+      bluetoothSupported
+    });
+    
+    if (!device) {
+      console.error('❌ DEBUG: Test print failed - no device');
+      return toast({ title: 'No Device', description: 'Please connect a printer first', variant: 'destructive' });
     }
     
+    // Try to connect even if external state says not connected
     try {
       console.log('🔍 DEBUG: Starting test print...');
       const server = await device.gatt?.connect();
@@ -577,6 +614,12 @@ export const BluetoothPrinter = ({
       
       await sendDataInChunks(writeChar, bytes);
       console.log('✅ DEBUG: Test print completed successfully');
+      
+      // Update connection state if it was wrong
+      if (!externalIsConnected) {
+        console.log('🔍 DEBUG: Updating connection state after successful test print');
+        externalOnConnectionChange(true);
+      }
       
       toast({ title: 'Test Print Sent', description: 'Check your printer for test output' });
     } catch (e: any) {
@@ -847,9 +890,8 @@ export const BluetoothPrinter = ({
             variant="outline"
             size="sm"
             className="w-full text-xs"
-            disabled={!externalIsConnected}
           >
-            🧪 Test Print (Connected Only)
+            🧪 Test Print
           </Button>
           
           <Button 
@@ -865,7 +907,6 @@ export const BluetoothPrinter = ({
             variant="outline"
             size="sm"
             className="w-full text-xs"
-            disabled={!externalIsConnected}
           >
             🧪 Simple Test Print
           </Button>
