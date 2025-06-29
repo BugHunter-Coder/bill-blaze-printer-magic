@@ -15,6 +15,11 @@ export interface DatabaseProduct {
   has_variants: boolean;
   created_at: string;
   updated_at: string;
+  categories?: {
+    id: string;
+    name: string;
+    icon?: string;
+  };
 }
 
 export interface ProductVariant {

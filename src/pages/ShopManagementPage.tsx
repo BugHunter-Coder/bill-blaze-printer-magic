@@ -1,72 +1,35 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/hooks/useShop';
 import { supabase } from '@/integrations/supabase/client';
-import { ShopManagement } from '@/components/ShopManagement';
+import { ShopSettings } from '@/components/ShopSettings';
+import { StaffManagement } from '@/components/StaffManagement';
+import { PrinterSetup } from '@/components/PrinterSetup';
+import { Integrations } from '@/components/Integrations';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { Transaction, Expense } from '@/types/pos';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, Loader2, Settings, Users, Receipt, Globe } from 'lucide-react';
 
 export const ShopManagementPage = () => {
   const { user, loading } = useAuth();
   const { selectedShop, loading: shopLoading } = useShop();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loadingTransactions, setLoadingTransactions] = useState(true);
-
-  // Get default tab from URL params
-  const defaultTab = searchParams.get('tab') || 'products';
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState('settings');
 
   useEffect(() => {
-    if (selectedShop?.id) {
-      fetchTransactions();
+    // Set active tab based on URL
+    if (location.pathname.includes('/shop/settings')) {
+      setActiveTab('settings');
+    } else if (location.pathname.includes('/shop/staff')) {
+      setActiveTab('staff');
+    } else if (location.pathname.includes('/shop/printer')) {
+      setActiveTab('printer');
+    } else if (location.pathname.includes('/shop/integrations')) {
+      setActiveTab('integrations');
     }
-  }, [selectedShop?.id]);
-
-  const fetchTransactions = async () => {
-    if (!selectedShop?.id) return;
-
-    try {
-      setLoadingTransactions(true);
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('shop_id', selectedShop.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTransactions(data || []);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-    } finally {
-      setLoadingTransactions(false);
-    }
-  };
-
-  const handleShopUpdate = () => {
-    // Refresh data when shop is updated
-    fetchTransactions();
-  };
-
-  const handleAddExpense = async (expense: Expense) => {
-    try {
-      const { error } = await supabase
-        .from('expenses')
-        .insert({
-          ...expense,
-          shop_id: selectedShop?.id,
-        });
-
-      if (error) throw error;
-
-      // Refresh transactions to include the new expense
-      fetchTransactions();
-    } catch (error) {
-      console.error('Error adding expense:', error);
-    }
-  };
+  }, [location.pathname]);
 
   if (loading || shopLoading) {
     return (
@@ -103,35 +66,67 @@ export const ShopManagementPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button 
-              variant="outline" 
-              onClick={() => navigate('/pos')}
-              className="flex items-center space-x-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Back to POS</span>
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Shop Management</h1>
-              <p className="text-gray-600">Manage {selectedShop.name}</p>
+    <div className="overflow-y-auto bg-gray-50">
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => navigate('/dashboard')}
+                  className="flex items-center space-x-2"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>Back to Dashboard</span>
+                </Button>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">Shop Management</h1>
+                  <p className="text-gray-600">Manage {selectedShop.name} settings and configuration</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="h-[calc(100vh-80px)]">
-        <ShopManagement
-          onShopUpdate={handleShopUpdate}
-          transactions={transactions}
-          onAddExpense={handleAddExpense}
-          defaultTab={defaultTab}
-        />
+          {/* Shop Management Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-4 bg-white p-1 rounded-xl shadow-sm border border-gray-200">
+              <TabsTrigger value="settings" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all flex items-center space-x-2">
+                <Settings className="h-4 w-4" />
+                <span>Shop Settings</span>
+              </TabsTrigger>
+              <TabsTrigger value="staff" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all flex items-center space-x-2">
+                <Users className="h-4 w-4" />
+                <span>Staff Management</span>
+              </TabsTrigger>
+              <TabsTrigger value="printer" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all flex items-center space-x-2">
+                <Receipt className="h-4 w-4" />
+                <span>Printer Setup</span>
+              </TabsTrigger>
+              <TabsTrigger value="integrations" className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all flex items-center space-x-2">
+                <Globe className="h-4 w-4" />
+                <span>Integrations</span>
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="settings" className="mt-6">
+              <ShopSettings />
+            </TabsContent>
+
+            <TabsContent value="staff" className="mt-6">
+              <StaffManagement />
+            </TabsContent>
+
+            <TabsContent value="printer" className="mt-6">
+              <PrinterSetup />
+            </TabsContent>
+
+            <TabsContent value="integrations" className="mt-6">
+              <Integrations />
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   );

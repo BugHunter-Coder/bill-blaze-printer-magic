@@ -9,15 +9,28 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Package, Edit, Trash2, Settings, Upload, Download, FileText, X } from 'lucide-react';
 import { DatabaseProduct } from '@/types/pos';
 import { ProductVariantsManager } from './ProductVariantsManager';
 
+interface Category {
+  id: string;
+  shop_id: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export const ProductManagement = () => {
   const { profile } = useAuth();
   const { selectedShopId } = useShop();
   const [products, setProducts] = useState<DatabaseProduct[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showCSVUpload, setShowCSVUpload] = useState(false);
   const [editingProduct, setEditingProduct] = useState<DatabaseProduct | null>(null);
@@ -38,6 +51,7 @@ export const ProductManagement = () => {
     sku: '',
     barcode: '',
     has_variants: false,
+    category_id: '',
   });
 
   const [tempProductId, setTempProductId] = useState<string | null>(null);
@@ -45,6 +59,7 @@ export const ProductManagement = () => {
   useEffect(() => {
     if (selectedShopId) {
       fetchProducts();
+      fetchCategories();
     }
   }, [selectedShopId]);
 
@@ -55,7 +70,14 @@ export const ProductManagement = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('products')
-        .select('*')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            icon
+          )
+        `)
         .eq('shop_id', selectedShopId)
         .order('name');
       
@@ -73,6 +95,24 @@ export const ProductManagement = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    if (!selectedShopId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('shop_id', selectedShopId)
+        .eq('is_active', true)
+        .order('name');
+      
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -84,6 +124,7 @@ export const ProductManagement = () => {
       sku: '',
       barcode: '',
       has_variants: false,
+      category_id: '',
     });
     setShowAddForm(false);
     setShowCSVUpload(false);
@@ -160,6 +201,34 @@ export const ProductManagement = () => {
           const variantPrices = (row.variant_prices || row['Variant Prices'] || '').replace(/\//g, '|');
           const variantStocks = (row.variant_stocks || row['Variant Stocks'] || '').replace(/\//g, '|');
 
+          // Handle category lookup
+          let categoryId = null;
+          const categoryName = row.category || row.Category || row.category_name || row['Category Name'];
+          if (categoryName) {
+            // Find category by name
+            const category = categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
+            if (category) {
+              categoryId = category.id;
+            } else {
+              // Create category if it doesn't exist
+              const { data: newCategory, error: categoryError } = await supabase
+                .from('categories')
+                .insert({
+                  shop_id: selectedShopId,
+                  name: categoryName,
+                  is_active: true,
+                })
+                .select()
+                .single();
+
+              if (!categoryError && newCategory) {
+                categoryId = newCategory.id;
+                // Refresh categories list
+                await fetchCategories();
+              }
+            }
+          }
+
           // Create the product
           const productData = {
             shop_id: selectedShopId,
@@ -172,6 +241,7 @@ export const ProductManagement = () => {
             sku: row.sku || row.SKU || null,
             barcode: row.barcode || row.Barcode || null,
             has_variants: hasVariants,
+            category_id: categoryId,
           };
 
           const { data: product, error: productError } = await supabase
@@ -276,10 +346,10 @@ export const ProductManagement = () => {
   };
 
   const downloadCSVTemplate = () => {
-    const template = `Name,Description,Price,Cost Price,Stock Quantity,Min Stock Level,SKU,Barcode,Has Variants,Variant Options,Variant Prices,Variant Stocks
-"Sample Product","Product description",100.00,80.00,50,10,"SKU001","1234567890",false,,,
-"Restaurant Item","Delicious food item",0.00,0.00,100,20,"SKU002","0987654321",true,"Half Plate|Full Plate","75.00|150.00","10|20"
-"Another Product","Another description",150.00,120.00,30,5,"SKU003","1122334455",false,,,
+    const template = `Name,Description,Price,Cost Price,Stock Quantity,Min Stock Level,SKU,Barcode,Category,Has Variants,Variant Options,Variant Prices,Variant Stocks
+"Sample Product","Product description",100.00,80.00,50,10,"SKU001","1234567890","Electronics",false,,,
+"Restaurant Item","Delicious food item",0.00,0.00,100,20,"SKU002","0987654321","Food",true,"Half Plate|Full Plate","75.00|150.00","10|20"
+"Another Product","Another description",150.00,120.00,30,5,"SKU003","1122334455","Clothing",false,,,
 `;
     
     const blob = new Blob([template], { type: 'text/csv' });
@@ -307,6 +377,7 @@ export const ProductManagement = () => {
         sku: formData.sku || null,
         barcode: formData.barcode || null,
         has_variants: formData.has_variants,
+        category_id: formData.category_id || null,
       };
 
       if (editingProduct) {
@@ -374,6 +445,7 @@ export const ProductManagement = () => {
       sku: product.sku || '',
       barcode: product.barcode || '',
       has_variants: product.has_variants || false,
+      category_id: product.category_id || '',
     });
     setShowAddForm(true);
   };
@@ -655,16 +727,28 @@ export const ProductManagement = () => {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label htmlFor="sku" className="text-sm font-medium text-gray-700">
-                          SKU (Stock Keeping Unit)
+                        <Label htmlFor="category" className="text-sm font-medium text-gray-700">
+                          Category
                         </Label>
-                        <Input
-                          id="sku"
-                          value={formData.sku}
-                          onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                          className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                          placeholder="e.g., PROD-001"
-                        />
+                        <Select
+                          value={formData.category_id}
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value === "none" ? "" : value }))}
+                        >
+                          <SelectTrigger className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Category</SelectItem>
+                            {categories.map((category) => (
+                              <SelectItem key={category.id} value={category.id}>
+                                <div className="flex items-center space-x-2">
+                                  <span>{category.icon || '📁'}</span>
+                                  <span>{category.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
@@ -680,6 +764,34 @@ export const ProductManagement = () => {
                         placeholder="Describe your product..."
                         rows={3}
                       />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="sku" className="text-sm font-medium text-gray-700">
+                          SKU (Stock Keeping Unit)
+                        </Label>
+                        <Input
+                          id="sku"
+                          value={formData.sku}
+                          onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
+                          className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          placeholder="e.g., PROD-001"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="barcode" className="text-sm font-medium text-gray-700">
+                          Barcode
+                        </Label>
+                        <Input
+                          id="barcode"
+                          value={formData.barcode}
+                          onChange={(e) => setFormData(prev => ({ ...prev, barcode: e.target.value }))}
+                          className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                          placeholder="Scan or enter barcode"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -728,21 +840,6 @@ export const ProductManagement = () => {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label htmlFor="barcode" className="text-sm font-medium text-gray-700">
-                          Barcode
-                        </Label>
-                        <Input
-                          id="barcode"
-                          value={formData.barcode}
-                          onChange={(e) => setFormData(prev => ({ ...prev, barcode: e.target.value }))}
-                          className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                          placeholder="Scan or enter barcode"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
                         <Label htmlFor="stock_quantity" className="text-sm font-medium text-gray-700">
                           Current Stock *
                         </Label>
@@ -756,7 +853,9 @@ export const ProductManagement = () => {
                           placeholder="0"
                         />
                       </div>
-                      
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label htmlFor="min_stock_level" className="text-sm font-medium text-gray-700">
                           Minimum Stock Level
@@ -868,6 +967,15 @@ export const ProductManagement = () => {
                           <h3 className="font-semibold text-lg text-gray-900 truncate">{product.name}</h3>
                           {product.sku && (
                             <p className="text-sm text-gray-500 mt-1">SKU: {product.sku}</p>
+                          )}
+                          {product.categories && (
+                            <div className="flex items-center space-x-1 mt-1">
+                              <span className="text-sm text-gray-500">Category:</span>
+                              <Badge variant="outline" className="text-xs">
+                                <span className="mr-1">{product.categories.icon || '📁'}</span>
+                                {product.categories.name}
+                              </Badge>
+                            </div>
                           )}
                         </div>
                         <div className="flex space-x-1 ml-2">

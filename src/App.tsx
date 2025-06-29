@@ -15,6 +15,8 @@ import POS from "./pages/POS";
 import AddProduct from "./pages/AddProduct";
 import NotFound from "./pages/NotFound";
 import ShopManagementPage from "./pages/ShopManagementPage";
+import Analytics from "./pages/Analytics";
+import { CategoryManagement } from "@/components/CategoryManagement";
 
 const queryClient = new QueryClient();
 
@@ -64,10 +66,122 @@ const App = () => (
                 } 
               />
               <Route 
+                path="/products/categories" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <CategoryManagement />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/products/catalog" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <CategoryManagement />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
                 path="/shop" 
                 element={
                   <ShopSetupRedirect>
-                    <ShopManagementPage />
+                    <Layout>
+                      <ShopManagementPage />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/shop/settings" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <ShopManagementPage />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/shop/staff" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <ShopManagementPage />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/shop/printer" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <ShopManagementPage />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/shop/integrations" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <ShopManagementPage />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/analytics" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <Analytics />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/analytics/sales" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <Analytics />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/analytics/customers" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <Analytics />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/analytics/products" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <Analytics />
+                    </Layout>
+                  </ShopSetupRedirect>
+                } 
+              />
+              <Route 
+                path="/analytics/financial" 
+                element={
+                  <ShopSetupRedirect>
+                    <Layout>
+                      <Analytics />
+                    </Layout>
                   </ShopSetupRedirect>
                 } 
               />
