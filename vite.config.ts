@@ -47,7 +47,8 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',        // what Render will publish
       emptyOutDir: true,
-      sourcemap: !isDev,     // get nice stack traces in prod
+      sourcemap: !isDev,    
+      chunkSizeWarningLimit: 2500,   // get nice stack traces in prod
     },
   };
 });
