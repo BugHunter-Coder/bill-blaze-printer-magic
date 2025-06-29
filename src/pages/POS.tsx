@@ -1,414 +1,282 @@
-import { useState, useEffect } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/hooks/useShop';
 import { useToast } from '@/hooks/use-toast';
-import { POSInterface } from '@/components/POSInterface';
-import { ShopManagement } from '@/components/ShopManagement';
-import { Button } from '@/components/ui/button';
-import { Settings, ArrowLeft, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 import { ProductCatalog } from '@/components/ProductCatalog';
 import { Cart } from '@/components/Cart';
 import { BluetoothPrinter } from '@/components/BluetoothPrinter';
-import { Product, CartItem } from '@/types/pos';
 import Header from '@/components/Header';
+import { Loader2, ShoppingCart } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+import { Product, CartItem } from '@/types/pos';
+import MobileCartPopover from './MobileCartPopover';
 
 type Shop = Database['public']['Tables']['shops']['Row'];
+const HEADER = 64; // px
 
-const POS = () => {
+export default function POS() {
   const { user, profile, loading, updateProfile } = useAuth();
   const { selectedShop, loading: shopLoading } = useShop();
-  const [showManagement, setShowManagement] = useState(false);
-  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Printer state management
-  const [isPrinterConnected, setIsPrinterConnected] = useState(false);
-  const [printerDevice, setPrinterDevice] = useState<BluetoothDevice | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [printerOK, setPrinterOK] = useState(false);
 
-  // Cart state
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  /* mobile-only UI state */
+  const [drawerOpen, setDrawerOpen] = useState(false); // pop-over visibility
+  const [pulse, setPulse] = useState(false);           // FAB bounce anim
 
-  // Add to cart handler
-  const handleAddToCart = (product: Product) => {
-    console.log('Adding to cart:', product); // Debug log
-    setCartItems(prev => {
-      // Create a unique ID for the cart item (product + variant combination)
-      const cartItemId = product.selectedVariant
-        ? `${product.id}_${product.selectedVariant.id}`
-        : product.id;
-      
-      console.log('Cart item ID:', cartItemId); // Debug log
-      
-      // Check if this exact product+variant combination already exists
-      const existingItem = prev.find(item => {
-        const itemId = item.selectedVariant
-          ? `${item.id}_${item.selectedVariant.id}`
-          : item.id;
-        return itemId === cartItemId;
-      });
-      
-      if (existingItem) {
-        // Update quantity of existing item
-        return prev.map(item => {
-          const itemId = item.selectedVariant
-            ? `${item.id}_${item.selectedVariant.id}`
-            : item.id;
-          return itemId === cartItemId
-            ? { ...item, quantity: item.quantity + 1 }
-            : item;
-        });
-      } else {
-        // Add new item to cart
-        return [...prev, { ...product, quantity: 1 }];
-      }
+  /* ─────────────────────── CART HELPERS ─────────────────────── */
+  const addToCart = (p: Product) => {
+    setCart(prev => {
+      const key = p.selectedVariant ? `${p.id}_${p.selectedVariant.id}` : p.id;
+      const found = prev.find(i =>
+        i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` === key : i.id === key,
+      );
+      return found
+        ? prev.map(i =>
+            (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) === key
+              ? { ...i, quantity: i.quantity + 1 }
+              : i,
+          )
+        : [...prev, { ...p, quantity: 1 }];
     });
+
+    // trigger bounce on FAB
+    setPulse(true);
+    setTimeout(() => setPulse(false), 600);
   };
 
-  // Update quantity handler
-  const handleUpdateQuantity = (id: string, quantity: number) => {
-    console.log('Updating quantity for ID:', id, 'to:', quantity); // Debug log
-    if (quantity <= 0) {
-      handleRemoveItem(id);
-      return;
-    }
-    setCartItems(prev =>
-      prev.map(item => {
-        const itemId = item.selectedVariant
-          ? `${item.id}_${item.selectedVariant.id}`
-          : item.id;
-        return itemId === id ? { ...item, quantity } : item;
-      })
+  const updateQty = (id: string, q: number) =>
+    setCart(prev =>
+      prev
+        .map(i =>
+          (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) === id
+            ? { ...i, quantity: q }
+            : i,
+        )
+        .filter(i => i.quantity > 0),
     );
-  };
 
-  // Remove item handler
-  const handleRemoveItem = (id: string) => {
-    console.log('Removing item with ID:', id); // Debug log
-    setCartItems(prev => prev.filter(item => {
-      const itemId = item.selectedVariant
-        ? `${item.id}_${item.selectedVariant.id}`
-        : item.id;
-      return itemId !== id;
-    }));
-  };
+  const total = cart.reduce((t, i) => t + i.price * i.quantity, 0);
 
-  // Clear cart handler
-  const handleClearCart = () => setCartItems([]);
-
-  // Calculate total
-  const cartTotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-
-  // Handle order completion - save to database
-  const handleOrderComplete = async (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => {
-    console.log('🔍 DEBUG: POS handleOrderComplete called with:', { paymentMethod, directAmount });
-    console.log('🔍 DEBUG: User state:', { user: !!user, userId: user?.id });
-    console.log('🔍 DEBUG: Profile state:', { profile: !!profile, profileId: profile?.id, profileData: profile });
-    console.log('🔍 DEBUG: Shop state:', { shopId: selectedShop?.id, shopName: selectedShop?.name });
-    console.log('🔍 DEBUG: Cart state:', { cartItems: cartItems.length, cartTotal });
-
-    if (!user) {
-      console.error('❌ DEBUG: Order failed - no user');
-      toast({
-        title: "Error",
-        description: "User not authenticated",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!selectedShop?.id) {
-      console.error('❌ DEBUG: Order failed - no shop selected');
-      toast({
-        title: "Error",
-        description: "No shop selected",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Use profile.id if available, otherwise use user.id as fallback
-    const cashierId = profile?.id || user.id;
-    console.log('🔍 DEBUG: Using cashier_id:', cashierId, 'from profile:', !!profile);
+  /* ─────────────────────── CHECKOUT ─────────────────────────── */
+  const completeOrder = async (
+    method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
+    direct?: number,
+  ) => {
+    if (!user || !selectedShop?.id) return;
+    const sub = direct ?? total;
+    const tax = sub * (selectedShop.tax_rate || 0);
+    const grand = sub + tax;
 
     try {
-      const subtotal = directAmount || cartTotal;
-      const taxAmount = subtotal * (selectedShop.tax_rate || 0);
-      const totalAmount = subtotal + taxAmount;
-
-      console.log('🔍 DEBUG: Calculated amounts:', { subtotal, taxAmount, totalAmount, taxRate: selectedShop.tax_rate });
-
-      // Create transaction
-      console.log('🔍 DEBUG: Creating transaction...');
-      const { data: transaction, error: transactionError } = await supabase
+      const { data: tx, error } = await supabase
         .from('transactions')
         .insert({
           shop_id: selectedShop.id,
-          cashier_id: cashierId, // Use the determined cashier_id
+          cashier_id: profile?.id || user.id,
           type: 'sale',
-          subtotal,
-          tax_amount: taxAmount,
-          discount_amount: 0,
-          total_amount: totalAmount,
-          payment_method: paymentMethod,
-          is_direct_billing: !!directAmount,
+          subtotal: sub,
+          tax_amount: tax,
+          total_amount: grand,
+          payment_method: method,
+          is_direct_billing: !!direct,
         })
         .select()
         .single();
+      if (error) throw error;
 
-      if (transactionError) {
-        console.error('❌ DEBUG: Transaction creation failed:', transactionError);
-        throw transactionError;
-      }
-
-      console.log('✅ DEBUG: Transaction created successfully:', transaction);
-
-      // Create transaction items (if not direct billing)
-      if (!directAmount && cartItems.length > 0) {
-        console.log('🔍 DEBUG: Creating transaction items...');
-        const transactionItems = cartItems.map(item => ({
-          transaction_id: transaction.id,
-          product_id: item.id,
-          product_name: item.name,
-          quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.price * item.quantity,
+      if (!direct && cart.length) {
+        const lines = cart.map(i => ({
+          transaction_id: tx.id,
+          product_id: i.id,
+          product_name: i.name,
+          quantity: i.quantity,
+          unit_price: i.price,
+          total_price: i.price * i.quantity,
         }));
+        await supabase.from('transaction_items').insert(lines);
 
-        console.log('🔍 DEBUG: Transaction items to insert:', transactionItems);
-
-        const { error: itemsError } = await supabase
-          .from('transaction_items')
-          .insert(transactionItems);
-
-        if (itemsError) {
-          console.error('❌ DEBUG: Transaction items creation failed:', itemsError);
-          throw itemsError;
-        }
-
-        console.log('✅ DEBUG: Transaction items created successfully');
-
-        // Update product stock
-        console.log('🔍 DEBUG: Updating product stock...');
-        for (const item of cartItems) {
-          console.log('🔍 DEBUG: Updating stock for item:', { id: item.id, name: item.name, currentStock: item.stock_quantity, quantity: item.quantity });
-          const { error: stockError } = await supabase
+        for (const i of cart) {
+          await supabase
             .from('products')
-            .update({ 
-              stock_quantity: item.stock_quantity ? item.stock_quantity - item.quantity : 0 
+            .update({
+              stock_quantity: i.stock_quantity ? i.stock_quantity - i.quantity : 0,
             })
-            .eq('id', item.id);
-
-          if (stockError) {
-            console.error('❌ DEBUG: Stock update error for item', item.id, ':', stockError);
-          } else {
-            console.log('✅ DEBUG: Stock updated for item:', item.id);
-          }
+            .eq('id', i.id);
         }
       }
 
-      // Clear cart after successful transaction
-      console.log('🔍 DEBUG: Clearing cart...');
-      setCartItems([]);
-
-      console.log('✅ DEBUG: Order completed successfully!');
-      toast({
-        title: "Success",
-        description: "Order completed successfully!",
-      });
-
-    } catch (error: any) {
-      console.error('❌ DEBUG: Order completion error:', error);
-      console.error('❌ DEBUG: Error details:', { message: error.message, code: error.code, details: error.details });
-      throw error;
+      setCart([]);
+      setDrawerOpen(false);
+      toast({ description: 'Order completed!' });
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
     }
   };
 
-  // Check URL parameters to auto-open management
-  useEffect(() => {
-    const management = searchParams.get('management');
-    if (management === 'true' || management === 'sales' || management === 'products' || management === 'expenses') {
-      setShowManagement(true);
-    }
-  }, [searchParams]);
-
-  // Ensure profile is loaded and debug profile state
-  useEffect(() => {
-    console.log('🔍 DEBUG: Profile state changed:', { 
-      user: !!user, 
-      profile: !!profile, 
-      profileId: profile?.id,
-      profileData: profile 
-    });
-    
-    if (user && !profile) {
-      console.log('🔍 DEBUG: User exists but profile is missing, this might indicate an issue');
-    }
-  }, [user, profile]);
-
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-      toast({ description: "Logout successful!" });
-      navigate('/auth');
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to logout: " + error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleProfileUpdate = async (data: any) => {
-    try {
-      await updateProfile(data);
-      toast({ description: "Profile updated successfully!" });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to update profile: " + error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleOpenManagement = () => setShowManagement(true);
-  const handlePrinterConnectionChange = (isConnected: boolean) => setIsPrinterConnected(isConnected);
-  const handlePrinterChange = (device: BluetoothDevice | null) => setPrinterDevice(device);
-
-  // Test database connection and permissions
-  const testDatabaseConnection = async () => {
-    console.log('🧪 DEBUG: Testing database connection...');
-    try {
-      // Test 1: Check if we can read from profiles table
-      const { data: profileTest, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .eq('id', user?.id)
-        .single();
-      
-      console.log('🔍 DEBUG: Profile test result:', { profileTest, profileError });
-      
-      // Test 2: Check if we can read from shops table
-      const { data: shopTest, error: shopError } = await supabase
-        .from('shops')
-        .select('id, name')
-        .eq('id', selectedShop?.id)
-        .single();
-      
-      console.log('🔍 DEBUG: Shop test result:', { shopTest, shopError });
-      
-      // Test 3: Check if we can read from transactions table
-      const { data: transactionTest, error: transactionError } = await supabase
-        .from('transactions')
-        .select('id, total_amount')
-        .eq('shop_id', selectedShop?.id)
-        .limit(1);
-      
-      console.log('🔍 DEBUG: Transaction test result:', { transactionTest, transactionError });
-      
-      toast({ 
-        title: 'Database Test Complete', 
-        description: 'Check console for results' 
-      });
-      
-    } catch (error) {
-      console.error('❌ DEBUG: Database test failed:', error);
-      toast({ 
-        title: 'Database Test Failed', 
-        description: error.message, 
-        variant: 'destructive' 
-      });
-    }
-  };
-
-  if (loading || shopLoading) {
+  /* ─────────────────────── GUARDS ───────────────────────────── */
+  if (loading || shopLoading)
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Loading...</span>
-        </div>
+        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+        Loading…
       </div>
     );
-  }
-
   if (!user) return <Navigate to="/auth" replace />;
-  if (!selectedShop) {
+  if (!selectedShop)
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <p className="text-gray-600 mb-2">No company selected</p>
-          <p className="text-sm text-gray-500 mb-4">Please select a company from the header to use the POS system.</p>
+        <div className="space-y-4 text-center">
+          <p>No company selected</p>
           <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
         </div>
       </div>
     );
-  }
 
-  // --- REDESIGNED POS LAYOUT ---
+  /* ─────────────────────── LAYOUT ───────────────────────────── */
   return (
-    <div className="h-screen w-screen flex flex-col bg-gradient-to-br from-gray-50 to-blue-50">
-      {/* Navbar/Header */}
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 to-blue-50">
+      {/* Header */}
       <Header
         user={user}
-        onLogout={handleLogout}
-        onProfileUpdate={handleProfileUpdate}
-        onOpenManagement={handleOpenManagement}
-        isPrinterConnected={isPrinterConnected}
-        onPrinterConnectionChange={handlePrinterConnectionChange}
-        onPrinterChange={handlePrinterChange}
+        onLogout={async () => {
+          await supabase.auth.signOut();
+          navigate('/auth');
+        }}
+        onProfileUpdate={updateProfile}
+        onOpenManagement={() => {}}
+        isPrinterConnected={printerOK}
+        onPrinterConnectionChange={setPrinterOK}
+        onPrinterChange={() => {}}
       />
-      {/* Main POS Layout */}
-      <div className="flex-1 flex flex-row min-h-0">
-        {/* Product Grid */}
-        <div className="flex-1 h-full overflow-y-auto p-4">
-          <ProductCatalog onAddToCart={handleAddToCart} onAddProduct={() => {}} />
-        </div>
-        {/* Cart/Payment Sidebar */}
-        <div className="w-[350px] xl:w-[420px] h-full flex flex-col bg-white border-l shadow-xl">
-          {/* Cart Items (scrollable) */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+
+      {/* Main */}
+      <main
+        className="
+          flex-1 grid auto-rows-fr
+          md:[grid-template-columns:1fr_28rem]
+          lg:[grid-template-columns:1fr_34rem]
+          xl:[grid-template-columns:1fr_40rem]
+        "
+        style={{ minHeight: `calc(100vh - ${HEADER}px)` }}
+      >
+        {/* Product grid */}
+        <section className="overflow-hidden">
+          <div
+            className="
+              h-full overflow-y-auto
+              p-3 sm:p-4
+              grid gap-4
+              [grid-template-columns:repeat(auto-fit,minmax(160px,1fr))]
+            "
+          >
+            <ProductCatalog onAddToCart={addToCart} onAddProduct={() => {}} />
+          </div>
+        </section>
+
+        {/* Cart drawer / side-panel */}
+        <aside
+          id="cartDrawer"
+          className="
+            bg-white shadow-xl border-l flex flex-col
+            md:sticky md:top-[64px] md:self-start
+            md:h-[calc(100vh-64px)]
+            md:overflow-hidden
+            fixed inset-x-0 bottom-0 h-[85vh] rounded-t-2xl
+            translate-y-full md:translate-y-0
+            transition-transform duration-300
+            data-[open='true']:translate-y-0
+            md:relative md:rounded-none
+          "
+          data-open={cart.length > 0 ? 'true' : undefined}
+        >
+          <div className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-gray-300 md:hidden" />
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
             <Cart
-              items={cartItems}
-              onUpdateQuantity={handleUpdateQuantity}
-              onRemoveItem={handleRemoveItem}
-              onClearCart={handleClearCart}
-              total={cartTotal}
+              items={cart}
+              onUpdateQuantity={updateQty}
+              onRemoveItem={id =>
+                setCart(prev =>
+                  prev.filter(
+                    i =>
+                      (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) !== id,
+                  ),
+                )
+              }
+              onClearCart={() => setCart([])}
+              total={total}
               shopDetails={selectedShop}
             />
           </div>
-          {/* Order Summary & Payment (always visible) */}
-          <div className="flex-shrink-0 bg-white p-3 border-t">
-            {/* Debug Test Button */}
-            <Button 
-              onClick={testDatabaseConnection}
-              variant="outline"
-              size="sm"
-              className="w-full mb-2 text-xs"
-            >
-              🧪 Test Database Connection
-            </Button>
-            
-            {/* Place your OrderSummary and PaymentSection components here */}
+
+          <div className="border-t p-4">
             <BluetoothPrinter
-              isConnected={isPrinterConnected}
-              onConnectionChange={handlePrinterConnectionChange}
-              onPrinterChange={handlePrinterChange}
-              cart={cartItems}
-              total={cartTotal}
-              onOrderComplete={handleOrderComplete}
+              isConnected={printerOK}
+              onConnectionChange={setPrinterOK}
+              onPrinterChange={() => {}}
+              cart={cart}
+              total={total}
+              onOrderComplete={completeOrder}
               shopDetails={selectedShop}
             />
           </div>
-        </div>
-      </div>
+        </aside>
+      </main>
+
+      {/* FAB */}
+      <button
+        onClick={() => setDrawerOpen(o => !o)}
+        className={`
+          md:hidden fixed bottom-4 right-4 z-30
+          h-14 w-14 rounded-full bg-blue-600 text-white
+          flex items-center justify-center shadow-lg
+          transition-transform duration-300
+          ${pulse ? 'animate-bounce' : ''}
+        `}
+      >
+        <ShoppingCart className="h-6 w-6" />
+        {cart.length > 0 && (
+          <span
+            className="
+              absolute -top-1.5 -right-1.5 flex h-6 w-6
+              items-center justify-center
+              rounded-full bg-red-600 text-xs font-medium
+            "
+          >
+            {cart.length}
+          </span>
+        )}
+      </button>
+
+      {/* Pop-over mini cart */}
+      {/* <MobileCartPopover
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        cart={cart}
+        total={total}
+        onUpdateQty={updateQty}
+        onRemove={id =>
+          setCart(prev =>
+            prev.filter(
+              i =>
+                (i.selectedVariant ? `${i.id}_${i.selectedVariant.id}` : i.id) !== id,
+            ),
+          )
+        }
+        onClear={() => setCart([])}
+        onGoCheckout={() => {
+          setDrawerOpen(false);
+          document.getElementById('cartDrawer')?.setAttribute('data-open', 'true');
+        }}
+      /> */}
     </div>
   );
-};
-
-export default POS;
+}
