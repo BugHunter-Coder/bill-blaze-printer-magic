@@ -164,19 +164,29 @@ export const BluetoothPrinter = ({
     data: Uint8Array,
     chunk = 40
   ) => {
+    console.log('🔍 DEBUG: Sending data in chunks, total size:', data.length, 'chunk size:', chunk);
     for (let i = 0; i < data.length; i += chunk) {
-      await ch.writeValue(data.slice(i, i + chunk));
+      const chunkData = data.slice(i, i + chunk);
+      console.log('🔍 DEBUG: Sending chunk', Math.floor(i/chunk) + 1, 'of', Math.ceil(data.length/chunk), 'size:', chunkData.length);
+      await ch.writeValue(chunkData);
+      // Small delay between chunks to prevent buffer overflow
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
+    console.log('✅ DEBUG: All chunks sent successfully');
   };
 
   const forceEnglish = async (ch: BluetoothRemoteGATTCharacteristic) => {
     const enc = new TextEncoder();
+    console.log('🔍 DEBUG: Sending printer initialization commands');
     await ch.writeValue(enc.encode('\x1B@\x1BM\x01')); // init + Font B
+    console.log('✅ DEBUG: Printer initialization sent');
   };
 
   const resetFont = async (ch: BluetoothRemoteGATTCharacteristic) => {
     const enc = new TextEncoder();
+    console.log('🔍 DEBUG: Resetting font');
     await ch.writeValue(enc.encode('\x1BM\x00')); // Font A
+    console.log('✅ DEBUG: Font reset sent');
   };
 
   const printReceipt = async () => {
@@ -263,8 +273,12 @@ export const BluetoothPrinter = ({
     setIsConnecting(true);
     try {
       const svcUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '00001101-0000-1000-8000-00805f9b34fb',
+        '000018f0-0000-1000-8000-00805f9b34fb', // Common printer service
+        '00001101-0000-1000-8000-00805f9b34fb', // Serial Port Profile
+        '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10/HM-11 service
+        '0000ffe1-0000-1000-8000-00805f9b34fb', // HM-10/HM-11 characteristic
+        '0000ff00-0000-1000-8000-00805f9b34fb', // Generic printer service
+        '0000ff01-0000-1000-8000-00805f9b34fb', // Generic printer characteristic
       ];
       
       // First try to get the device from previously allowed devices
@@ -379,8 +393,12 @@ export const BluetoothPrinter = ({
     setIsConnecting(true);
     try {
       const svcUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '00001101-0000-1000-8000-00805f9b34fb',
+        '000018f0-0000-1000-8000-00805f9b34fb', // Common printer service
+        '00001101-0000-1000-8000-00805f9b34fb', // Serial Port Profile
+        '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10/HM-11 service
+        '0000ffe1-0000-1000-8000-00805f9b34fb', // HM-10/HM-11 characteristic
+        '0000ff00-0000-1000-8000-00805f9b34fb', // Generic printer service
+        '0000ff01-0000-1000-8000-00805f9b34fb', // Generic printer characteristic
       ];
       console.log('🔍 DEBUG: Requesting device with UUIDs:', svcUUIDs);
       
@@ -509,6 +527,65 @@ export const BluetoothPrinter = ({
     } catch (error) {
       console.error('❌ DEBUG: Order completion failed:', error);
       toast({ title: 'Order Failed', variant: 'destructive' });
+    }
+  };
+
+  // Simple test print function
+  const testPrint = async () => {
+    console.log('🧪 DEBUG: testPrint called');
+    if (!device || !externalIsConnected) {
+      console.error('❌ DEBUG: Test print failed - not connected');
+      return toast({ title: 'Not Connected', variant: 'destructive' });
+    }
+    
+    try {
+      console.log('🔍 DEBUG: Starting test print...');
+      const server = await device.gatt?.connect();
+      if (!server) {
+        console.error('❌ DEBUG: GATT connect failed for test print');
+        throw new Error('GATT connect failed');
+      }
+      console.log('✅ DEBUG: GATT server connected for test print');
+
+      const services = await server.getPrimaryServices();
+      console.log('🔍 DEBUG: Found services for test print:', services.length);
+      
+      let writeChar: BluetoothRemoteGATTCharacteristic | null = null;
+      for (const svc of services) {
+        console.log('🔍 DEBUG: Checking service for test print:', svc.uuid);
+        const chars = await svc.getCharacteristics();
+        console.log('🔍 DEBUG: Service characteristics for test print:', chars.length);
+        
+        writeChar = chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) || null;
+        if (writeChar) {
+          console.log('✅ DEBUG: Found writable characteristic for test print:', writeChar.uuid);
+          break;
+        }
+      }
+      
+      if (!writeChar) {
+        console.error('❌ DEBUG: No writable characteristic found for test print');
+        throw new Error('No writable characteristic');
+      }
+
+      // Send simple test text
+      const testText = '\n\n\n=== TEST PRINT ===\n\nHello World!\n\nThis is a test print.\n\nDate: ' + new Date().toLocaleString() + '\n\n\n\n\n';
+      console.log('🔍 DEBUG: Test text to send:', testText);
+      
+      const bytes = new TextEncoder().encode(testText);
+      console.log('🔍 DEBUG: Test data bytes:', bytes.length);
+      
+      await sendDataInChunks(writeChar, bytes);
+      console.log('✅ DEBUG: Test print completed successfully');
+      
+      toast({ title: 'Test Print Sent', description: 'Check your printer for test output' });
+    } catch (e: any) {
+      console.error('❌ DEBUG: Test print failed:', e);
+      toast({
+        title: 'Test Print Failed',
+        description: e.message || 'Unknown error',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -773,6 +850,24 @@ export const BluetoothPrinter = ({
             disabled={!externalIsConnected}
           >
             🧪 Test Print (Connected Only)
+          </Button>
+          
+          <Button 
+            onClick={async () => {
+              console.log('🧪 DEBUG: Testing simple print...');
+              try {
+                await testPrint();
+                console.log('✅ DEBUG: Simple print test successful');
+              } catch (error) {
+                console.error('❌ DEBUG: Simple print test failed:', error);
+              }
+            }}
+            variant="outline"
+            size="sm"
+            className="w-full text-xs"
+            disabled={!externalIsConnected}
+          >
+            🧪 Simple Test Print
           </Button>
           
           <Button 
