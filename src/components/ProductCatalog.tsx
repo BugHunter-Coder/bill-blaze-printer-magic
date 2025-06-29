@@ -152,8 +152,8 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Enhanced Search and Filters */}
-      <div className="flex-shrink-0 p-2 md:p-3 bg-white border-b border-gray-200">
+      {/* Enhanced Search and Filters - sticky in full screen */}
+      <div className="sticky top-0 z-10 bg-white/90 backdrop-blur p-2 md:p-3 border-b border-gray-200 shadow-sm">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm md:text-base lg:text-lg font-bold text-gray-900 flex items-center">
             <svg className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +172,6 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
             </Button>
           )}
         </div>
-        
         <div className="relative">
           <Search className="absolute left-2 md:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 md:h-4 md:w-4" />
           <Input
@@ -182,7 +181,6 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
             className="pl-7 md:pl-10 h-8 md:h-9 lg:h-10 text-xs md:text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500"
           />
         </div>
-
         {/* Quick Stats */}
         <div className="flex items-center justify-between mt-2 text-xs text-gray-600">
           <span>{filteredProducts.length} products found</span>

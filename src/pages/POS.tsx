@@ -9,7 +9,7 @@ import { ProductCatalog } from '@/components/ProductCatalog';
 import { Cart } from '@/components/Cart';
 import { BluetoothPrinter } from '@/components/BluetoothPrinter';
 import Header from '@/components/Header';
-import { Loader2, ShoppingCart, Maximize2, Minimize2 } from 'lucide-react';
+import { Loader2, ShoppingCart, Maximize2, Minimize2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 import { Product, CartItem } from '@/types/pos';
@@ -29,6 +29,7 @@ export default function POS() {
   const [isFullScreen, setIsFullScreen] = useState(true);
   const [isBrowserFullScreen, setIsBrowserFullScreen] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
+  const [showMobileCart, setShowMobileCart] = useState(false);
 
   /* mobile-only UI state */
   const [drawerOpen, setDrawerOpen] = useState(false); // pop-over visibility
@@ -53,6 +54,12 @@ export default function POS() {
     // trigger bounce on FAB
     setPulse(true);
     setTimeout(() => setPulse(false), 600);
+
+    // Show success toast
+    toast({
+      title: "Added to Cart",
+      description: `${p.name} has been added to your cart`,
+    });
   };
 
   const updateQty = (id: string, q: number) =>
@@ -224,26 +231,14 @@ export default function POS() {
   /* ─────────────────────── LAYOUT ───────────────────────────── */
   return (
     <>
-      {/* Portrait Mode Warning */}
-      {isPortrait && (
-        <div className="fixed inset-0 z-[60] bg-gradient-to-br from-blue-600 to-blue-800 text-white flex items-center justify-center">
-          <div className="text-center p-6 max-w-sm">
-            <div className="text-6xl mb-4">📱</div>
-            <h2 className="text-2xl font-bold mb-2">Please Rotate Your Device</h2>
-            <p className="text-lg">This POS system works best in landscape mode</p>
-            <div className="mt-4 text-sm opacity-80">
-              Rotate your device horizontally for the best experience
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Portrait Mode Warning - completely removed */}
+      {/* (Overlay code deleted) */}
 
       {/* Main POS Container */}
       <div 
         className={`
           ${isFullScreen ? 'fixed inset-0 z-50 bg-white' : 'min-h-screen'} 
           flex flex-col bg-gradient-to-br from-gray-50 to-blue-50
-          ${isPortrait ? 'auto-rotate portrait' : 'auto-rotate landscape'}
         `}
       >
         {/* Header - hidden in full screen mode */}
@@ -305,21 +300,39 @@ export default function POS() {
           <aside
             id="cartDrawer"
             className="
-              bg-white shadow-xl border-l flex flex-col
+              bg-white shadow-2xl border-l flex flex-col
               md:sticky md:top-[64px] md:self-start
               md:h-[calc(100vh-64px)]
               md:overflow-hidden
-              fixed inset-x-0 bottom-0 h-[85vh] rounded-t-2xl
+              fixed inset-x-0 bottom-0 max-h-[90vh] h-auto rounded-t-2xl
               translate-y-full md:translate-y-0
               transition-transform duration-300
               data-[open='true']:translate-y-0
               md:relative md:rounded-none
+              z-40
             "
-            data-open={cart.length > 0 ? 'true' : undefined}
+            data-open={showMobileCart ? 'true' : undefined}
           >
+            {/* Drag Handle */}
             <div className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-gray-300 md:hidden" />
+            
+            {/* Cart Header */}
+            <div className="flex items-center justify-between px-4 py-2 border-b md:hidden bg-white sticky top-0 z-10 rounded-t-2xl">
+              <h3 className="font-semibold text-gray-900">Cart ({cart.length} items)</h3>
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-bold text-green-600">₹{total.toFixed(2)}</div>
+                <button 
+                  onClick={() => setShowMobileCart(false)}
+                  className="p-1 text-gray-400 hover:text-red-500"
+                  aria-label="Close cart"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto px-2 pb-2 pt-1 space-y-2">
               <Cart
                 items={cart}
                 onUpdateQuantity={updateQty}
@@ -337,7 +350,8 @@ export default function POS() {
               />
             </div>
 
-            <div className="border-t p-4">
+            {/* Footer/Payment - sticky bottom */}
+            <div className="border-t px-2 py-3 bg-white sticky bottom-0 z-10 rounded-b-2xl">
               <BluetoothPrinter
                 isConnected={printerOK}
                 onConnectionChange={setPrinterOK}
@@ -351,16 +365,30 @@ export default function POS() {
           </aside>
         </main>
 
-        {/* FAB */}
+        {/* Semi-transparent overlay for mobile cart */}
+        {showMobileCart && (
+          <div 
+            className="fixed inset-0 bg-black/20 z-30 md:hidden"
+            onClick={() => setShowMobileCart(false)}
+          />
+        )}
+
+        {/* FAB - Cart Button */}
         <button
-          onClick={() => setDrawerOpen(o => !o)}
+          onClick={() => {
+            if (cart.length > 0) {
+              setShowMobileCart(true);
+            }
+          }}
           className={`
             md:hidden fixed bottom-4 right-4 z-30
             h-14 w-14 rounded-full bg-blue-600 text-white
             flex items-center justify-center shadow-lg
-            transition-transform duration-300
+            transition-all duration-300
             ${pulse ? 'animate-bounce' : ''}
+            ${cart.length === 0 ? 'opacity-50' : 'opacity-100 hover:bg-blue-700'}
           `}
+          disabled={cart.length === 0}
         >
           <ShoppingCart className="h-6 w-6" />
           {cart.length > 0 && (
@@ -375,6 +403,43 @@ export default function POS() {
             </span>
           )}
         </button>
+
+        {/* Mini Cart Preview - Shows briefly when items are added */}
+        {cart.length > 0 && !showMobileCart && (
+          <div className="md:hidden fixed bottom-20 right-4 z-20 bg-white rounded-lg shadow-lg border p-3 max-w-xs animate-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-gray-900">Cart Preview</span>
+              <button 
+                onClick={() => setShowMobileCart(true)}
+                className="text-xs text-blue-600 hover:text-blue-800"
+              >
+                View All
+              </button>
+            </div>
+            <div className="space-y-1">
+              {cart.slice(0, 2).map((item) => (
+                <div key={item.selectedVariant ? `${item.id}_${item.selectedVariant.id}` : item.id} className="flex items-center justify-between text-xs">
+                  <span className="truncate flex-1">{item.name}</span>
+                  <span className="font-medium">x{item.quantity}</span>
+                </div>
+              ))}
+              {cart.length > 2 && (
+                <div className="text-xs text-gray-500 text-center pt-1 border-t">
+                  +{cart.length - 2} more items
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t">
+              <span className="text-sm font-bold text-green-600">₹{total.toFixed(2)}</span>
+              <button 
+                onClick={() => setShowMobileCart(true)}
+                className="text-xs bg-blue-600 text-white px-3 py-1 rounded-full hover:bg-blue-700"
+              >
+                Checkout
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Full Screen Toggle Button - Desktop */}
         {!isFullScreen && (
