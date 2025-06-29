@@ -106,19 +106,33 @@ const POS = () => {
   const handleOrderComplete = async (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => {
     console.log('🔍 DEBUG: POS handleOrderComplete called with:', { paymentMethod, directAmount });
     console.log('🔍 DEBUG: User state:', { user: !!user, userId: user?.id });
-    console.log('🔍 DEBUG: Profile state:', { profile: !!profile, profileId: profile?.id });
+    console.log('🔍 DEBUG: Profile state:', { profile: !!profile, profileId: profile?.id, profileData: profile });
     console.log('🔍 DEBUG: Shop state:', { shopId: selectedShop?.id, shopName: selectedShop?.name });
     console.log('🔍 DEBUG: Cart state:', { cartItems: cartItems.length, cartTotal });
 
-    if (!user || !profile || !selectedShop?.id) {
-      console.error('❌ DEBUG: Order failed - missing user, profile or shop:', { user: !!user, profile: !!profile, shopId: selectedShop?.id });
+    if (!user) {
+      console.error('❌ DEBUG: Order failed - no user');
       toast({
         title: "Error",
-        description: "User not authenticated, profile not loaded, or no shop selected",
+        description: "User not authenticated",
         variant: "destructive",
       });
       return;
     }
+
+    if (!selectedShop?.id) {
+      console.error('❌ DEBUG: Order failed - no shop selected');
+      toast({
+        title: "Error",
+        description: "No shop selected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Use profile.id if available, otherwise use user.id as fallback
+    const cashierId = profile?.id || user.id;
+    console.log('🔍 DEBUG: Using cashier_id:', cashierId, 'from profile:', !!profile);
 
     try {
       const subtotal = directAmount || cartTotal;
@@ -133,7 +147,7 @@ const POS = () => {
         .from('transactions')
         .insert({
           shop_id: selectedShop.id,
-          cashier_id: profile.id,
+          cashier_id: cashierId, // Use the determined cashier_id
           type: 'sale',
           subtotal,
           tax_amount: taxAmount,
@@ -221,6 +235,20 @@ const POS = () => {
     }
   }, [searchParams]);
 
+  // Ensure profile is loaded and debug profile state
+  useEffect(() => {
+    console.log('🔍 DEBUG: Profile state changed:', { 
+      user: !!user, 
+      profile: !!profile, 
+      profileId: profile?.id,
+      profileData: profile 
+    });
+    
+    if (user && !profile) {
+      console.log('🔍 DEBUG: User exists but profile is missing, this might indicate an issue');
+    }
+  }, [user, profile]);
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -251,6 +279,52 @@ const POS = () => {
   const handleOpenManagement = () => setShowManagement(true);
   const handlePrinterConnectionChange = (isConnected: boolean) => setIsPrinterConnected(isConnected);
   const handlePrinterChange = (device: BluetoothDevice | null) => setPrinterDevice(device);
+
+  // Test database connection and permissions
+  const testDatabaseConnection = async () => {
+    console.log('🧪 DEBUG: Testing database connection...');
+    try {
+      // Test 1: Check if we can read from profiles table
+      const { data: profileTest, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('id', user?.id)
+        .single();
+      
+      console.log('🔍 DEBUG: Profile test result:', { profileTest, profileError });
+      
+      // Test 2: Check if we can read from shops table
+      const { data: shopTest, error: shopError } = await supabase
+        .from('shops')
+        .select('id, name')
+        .eq('id', selectedShop?.id)
+        .single();
+      
+      console.log('🔍 DEBUG: Shop test result:', { shopTest, shopError });
+      
+      // Test 3: Check if we can read from transactions table
+      const { data: transactionTest, error: transactionError } = await supabase
+        .from('transactions')
+        .select('id, total_amount')
+        .eq('shop_id', selectedShop?.id)
+        .limit(1);
+      
+      console.log('🔍 DEBUG: Transaction test result:', { transactionTest, transactionError });
+      
+      toast({ 
+        title: 'Database Test Complete', 
+        description: 'Check console for results' 
+      });
+      
+    } catch (error) {
+      console.error('❌ DEBUG: Database test failed:', error);
+      toast({ 
+        title: 'Database Test Failed', 
+        description: error.message, 
+        variant: 'destructive' 
+      });
+    }
+  };
 
   if (loading || shopLoading) {
     return (
@@ -310,6 +384,16 @@ const POS = () => {
           </div>
           {/* Order Summary & Payment (always visible) */}
           <div className="flex-shrink-0 bg-white p-3 border-t">
+            {/* Debug Test Button */}
+            <Button 
+              onClick={testDatabaseConnection}
+              variant="outline"
+              size="sm"
+              className="w-full mb-2 text-xs"
+            >
+              🧪 Test Database Connection
+            </Button>
+            
             {/* Place your OrderSummary and PaymentSection components here */}
             <BluetoothPrinter
               isConnected={isPrinterConnected}
