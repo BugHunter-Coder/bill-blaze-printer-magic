@@ -106,7 +106,13 @@ export const POSInterface = ({
   };
 
   const handleOrderComplete = async (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => {
+    console.log('🔍 DEBUG: handleOrderComplete called with:', { paymentMethod, directAmount });
+    console.log('🔍 DEBUG: User state:', { user: !!user, userId: user?.id });
+    console.log('🔍 DEBUG: Shop state:', { shopId: shopDetails?.id, shopName: shopDetails?.name });
+    console.log('🔍 DEBUG: Cart state:', { cartItems: cartItems.length, cartTotal: calculateTotal() });
+
     if (!user || !shopDetails?.id) {
+      console.error('❌ DEBUG: Order failed - missing user or shop:', { user: !!user, shopId: shopDetails?.id });
       toast({
         title: "Error",
         description: "User not authenticated or no shop selected",
@@ -120,7 +126,10 @@ export const POSInterface = ({
       const taxAmount = subtotal * (shopDetails.tax_rate || 0);
       const totalAmount = subtotal + taxAmount;
 
+      console.log('🔍 DEBUG: Calculated amounts:', { subtotal, taxAmount, totalAmount, taxRate: shopDetails.tax_rate });
+
       // Create transaction
+      console.log('🔍 DEBUG: Creating transaction...');
       const { data: transaction, error: transactionError } = await supabase
         .from('transactions')
         .insert({
@@ -137,10 +146,16 @@ export const POSInterface = ({
         .select()
         .single();
 
-      if (transactionError) throw transactionError;
+      if (transactionError) {
+        console.error('❌ DEBUG: Transaction creation failed:', transactionError);
+        throw transactionError;
+      }
+
+      console.log('✅ DEBUG: Transaction created successfully:', transaction);
 
       // Create transaction items (if not direct billing)
       if (!directAmount && cartItems.length > 0) {
+        console.log('🔍 DEBUG: Creating transaction items...');
         const transactionItems = cartItems.map(item => ({
           transaction_id: transaction.id,
           product_id: item.id,
@@ -150,14 +165,23 @@ export const POSInterface = ({
           total_price: item.price * item.quantity,
         }));
 
+        console.log('🔍 DEBUG: Transaction items to insert:', transactionItems);
+
         const { error: itemsError } = await supabase
           .from('transaction_items')
           .insert(transactionItems);
 
-        if (itemsError) throw itemsError;
+        if (itemsError) {
+          console.error('❌ DEBUG: Transaction items creation failed:', itemsError);
+          throw itemsError;
+        }
+
+        console.log('✅ DEBUG: Transaction items created successfully');
 
         // Update product stock
+        console.log('🔍 DEBUG: Updating product stock...');
         for (const item of cartItems) {
+          console.log('🔍 DEBUG: Updating stock for item:', { id: item.id, name: item.name, currentStock: item.stock_quantity, quantity: item.quantity });
           const { error: stockError } = await supabase
             .from('products')
             .update({ 
@@ -166,21 +190,26 @@ export const POSInterface = ({
             .eq('id', item.id);
 
           if (stockError) {
-            console.error('Stock update error:', stockError);
+            console.error('❌ DEBUG: Stock update error for item', item.id, ':', stockError);
+          } else {
+            console.log('✅ DEBUG: Stock updated for item:', item.id);
           }
         }
       }
 
       // Clear cart after successful transaction
+      console.log('🔍 DEBUG: Clearing cart...');
       clearCart();
 
+      console.log('✅ DEBUG: Order completed successfully!');
       toast({
         title: "Success",
         description: "Order completed successfully!",
       });
 
     } catch (error: any) {
-      console.error('Order completion error:', error);
+      console.error('❌ DEBUG: Order completion error:', error);
+      console.error('❌ DEBUG: Error details:', { message: error.message, code: error.code, details: error.details });
       throw error;
     }
   };

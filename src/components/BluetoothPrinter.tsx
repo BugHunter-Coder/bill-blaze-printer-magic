@@ -180,43 +180,75 @@ export const BluetoothPrinter = ({
   };
 
   const printReceipt = async () => {
+    console.log('🔍 DEBUG: printReceipt called');
+    console.log('🔍 DEBUG: Device state:', { device: !!device, deviceName: device?.name });
+    console.log('🔍 DEBUG: Connection state:', { externalIsConnected, deviceConnected: device?.gatt?.connected });
+    
     if (!device || !externalIsConnected) {
+      console.error('❌ DEBUG: Print failed - not connected:', { device: !!device, externalIsConnected });
       return toast({ title: 'Not Connected', variant: 'destructive' });
     }
+    
     try {
       const ascii = generateReceipt(true);
-      console.log('Receipt:', ascii);
+      console.log('🔍 DEBUG: Generated receipt:', ascii);
 
+      console.log('🔍 DEBUG: Connecting to GATT server...');
       const server = await device.gatt?.connect();
-      if (!server) throw new Error('GATT connect failed');
+      if (!server) {
+        console.error('❌ DEBUG: GATT connect failed');
+        throw new Error('GATT connect failed');
+      }
+      console.log('✅ DEBUG: GATT server connected');
 
+      console.log('🔍 DEBUG: Getting primary services...');
       const services = await server.getPrimaryServices();
+      console.log('🔍 DEBUG: Found services:', services.length);
+      
       let writeChar: BluetoothRemoteGATTCharacteristic | null = null;
       for (const svc of services) {
+        console.log('🔍 DEBUG: Checking service:', svc.uuid);
         const chars = await svc.getCharacteristics();
+        console.log('🔍 DEBUG: Service characteristics:', chars.length);
+        
         writeChar =
           chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) ||
           null;
-        if (writeChar) break;
+        if (writeChar) {
+          console.log('✅ DEBUG: Found writable characteristic:', writeChar.uuid);
+          break;
+        }
       }
-      if (!writeChar) throw new Error('No writable characteristic');
+      
+      if (!writeChar) {
+        console.error('❌ DEBUG: No writable characteristic found');
+        throw new Error('No writable characteristic');
+      }
 
       // Init printer, small font
+      console.log('🔍 DEBUG: Initializing printer...');
       await forceEnglish(writeChar);
+      console.log('✅ DEBUG: Printer initialized');
 
-      const payload =
-        ascii.replace(/\n/g, '\r\n') + '\n\n\n'; // lines
+      const payload = ascii.replace(/\n/g, '\r\n') + '\n\n\n'; // lines
+      console.log('🔍 DEBUG: Sending payload:', payload);
 
       const bytes = new TextEncoder().encode(payload);
+      console.log('🔍 DEBUG: Sending data in chunks, total bytes:', bytes.length);
       await sendDataInChunks(writeChar, bytes);
+      console.log('✅ DEBUG: Data sent successfully');
 
       // back to normal font & cut
+      console.log('🔍 DEBUG: Resetting font and cutting...');
       await resetFont(writeChar);
       await writeChar.writeValue(new TextEncoder().encode('\x1DVA\x0A'));
+      console.log('✅ DEBUG: Font reset and cut command sent');
 
+      console.log('✅ DEBUG: Print completed successfully');
       toast({ title: 'Printed', description: 'Receipt sent ✅' });
     } catch (e: any) {
-      console.error(e);
+      console.error('❌ DEBUG: Print failed:', e);
+      console.error('❌ DEBUG: Error details:', { message: e.message, name: e.name, stack: e.stack });
       toast({
         title: 'Print Failed',
         description: e.message || 'Unknown error',
@@ -332,25 +364,36 @@ export const BluetoothPrinter = ({
   };
 
   const connectToDevice = async () => {
+    console.log('🔍 DEBUG: connectToDevice called');
+    console.log('🔍 DEBUG: Bluetooth support:', { bluetoothSupported, hasBluetooth: 'bluetooth' in navigator });
+    
     if (!bluetoothSupported) {
+      console.error('❌ DEBUG: Bluetooth not supported');
       return toast({
         title: 'Bluetooth Not Supported',
         description: 'Use a compatible browser or device.',
         variant: 'destructive',
       });
     }
+    
     setIsConnecting(true);
     try {
       const svcUUIDs = [
         '000018f0-0000-1000-8000-00805f9b34fb',
         '00001101-0000-1000-8000-00805f9b34fb',
       ];
+      console.log('🔍 DEBUG: Requesting device with UUIDs:', svcUUIDs);
+      
       const dev = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: svcUUIDs,
       });
+      console.log('✅ DEBUG: Device selected:', { id: dev.id, name: dev.name });
+      
+      console.log('🔍 DEBUG: Connecting to GATT server...');
       const srv = await dev.gatt?.connect();
       if (srv) {
+        console.log('✅ DEBUG: GATT server connected');
         setDevice(dev);
         externalOnConnectionChange(true);
         onPrinterChange(dev);
@@ -363,16 +406,22 @@ export const BluetoothPrinter = ({
           timestamp: Date.now()
         });
         
+        console.log('✅ DEBUG: Printer connected and stored');
         toast({ title: 'Bluetooth Connected', description: dev.name || '' });
+        
         dev.addEventListener('gattserverdisconnected', () => {
+          console.log('🔍 DEBUG: Device disconnected');
           externalOnConnectionChange(false);
           setDevice(null);
           onPrinterChange(null);
           toast({ title: 'Disconnected', variant: 'destructive' });
         });
+      } else {
+        console.error('❌ DEBUG: GATT server connection failed');
       }
     } catch (err: any) {
-      console.error(err);
+      console.error('❌ DEBUG: Connection failed:', err);
+      console.error('❌ DEBUG: Error details:', { message: err.message, name: err.name });
       toast({
         title: 'Connection Failed',
         description:
@@ -430,14 +479,35 @@ export const BluetoothPrinter = ({
   };
 
   const handleCompleteOrder = async () => {
+    console.log('🔍 DEBUG: handleCompleteOrder called');
+    console.log('🔍 DEBUG: Connection state:', { externalIsConnected, device: !!device });
+    console.log('🔍 DEBUG: Cart state:', { cartLength: cart.length, total });
+    console.log('🔍 DEBUG: Direct billing:', { isDirectBilling, directAmount });
+    
+    if (!externalIsConnected) {
+      console.error('❌ DEBUG: Order failed - printer not connected');
+      toast({ title: 'Printer Not Connected', description: 'Please connect your Bluetooth printer before completing the order.', variant: 'destructive' });
+      return;
+    }
+    
     try {
+      console.log('🔍 DEBUG: Calling onOrderComplete...');
       const amt = isDirectBilling ? parseFloat(directAmount) : undefined;
       await onOrderComplete(paymentMethod, amt);
+      console.log('✅ DEBUG: Order completed successfully');
+      
       toast({ title: 'Order Completed' });
       setDirectAmount('');
       setIsDirectBilling(false);
-      if (externalIsConnected) await printReceipt();
-    } catch {
+      
+      if (externalIsConnected) {
+        console.log('🔍 DEBUG: Starting print process...');
+        await printReceipt();
+      } else {
+        console.log('❌ DEBUG: Skipping print - not connected');
+      }
+    } catch (error) {
+      console.error('❌ DEBUG: Order completion failed:', error);
       toast({ title: 'Order Failed', variant: 'destructive' });
     }
   };
@@ -492,7 +562,8 @@ export const BluetoothPrinter = ({
                 className="w-full h-12 md:h-14 text-base md:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
                 disabled={
                   (!cart.length && !isDirectBilling) ||
-                  (isDirectBilling && !directAmount)
+                  (isDirectBilling && !directAmount) ||
+                  !externalIsConnected
                 }
               >
                 <CreditCard className="h-5 w-5 md:h-6 md:w-6 mr-2" /> 
@@ -555,7 +626,8 @@ export const BluetoothPrinter = ({
                 className="w-full h-12 md:h-14 text-base md:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
                 disabled={
                   (!cart.length && !isDirectBilling) ||
-                  (isDirectBilling && !directAmount)
+                  (isDirectBilling && !directAmount) ||
+                  !externalIsConnected
                 }
               >
                 <CreditCard className="h-5 w-5 md:h-6 md:w-6 mr-2" /> 
@@ -652,7 +724,8 @@ export const BluetoothPrinter = ({
                 className="w-full h-12 lg:h-14 text-base lg:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
                 disabled={
                   (!cart.length && !isDirectBilling) ||
-                  (isDirectBilling && !directAmount)
+                  (isDirectBilling && !directAmount) ||
+                  !externalIsConnected
                 }
               >
                 <CreditCard className="h-5 w-5 lg:h-6 lg:w-6 mr-2 lg:mr-3" /> 
@@ -660,6 +733,71 @@ export const BluetoothPrinter = ({
               </Button>
             </div>
           </div>
+        </div>
+
+        {/* Test Buttons for Debugging */}
+        <div className="space-y-2 flex-shrink-0 border-t pt-3">
+          <div className="text-xs font-medium text-gray-600 mb-2">Debug Tools:</div>
+          <Button 
+            onClick={async () => {
+              console.log('🧪 DEBUG: Testing sales capture...');
+              try {
+                await onOrderComplete('cash', 100);
+                console.log('✅ DEBUG: Sales test successful');
+                toast({ title: 'Sales Test', description: 'Sales capture working ✅' });
+              } catch (error) {
+                console.error('❌ DEBUG: Sales test failed:', error);
+                toast({ title: 'Sales Test Failed', description: error.message, variant: 'destructive' });
+              }
+            }}
+            variant="outline"
+            size="sm"
+            className="w-full text-xs"
+          >
+            🧪 Test Sales Capture
+          </Button>
+          
+          <Button 
+            onClick={async () => {
+              console.log('🧪 DEBUG: Testing print...');
+              try {
+                await printReceipt();
+                console.log('✅ DEBUG: Print test successful');
+              } catch (error) {
+                console.error('❌ DEBUG: Print test failed:', error);
+              }
+            }}
+            variant="outline"
+            size="sm"
+            className="w-full text-xs"
+            disabled={!externalIsConnected}
+          >
+            🧪 Test Print (Connected Only)
+          </Button>
+          
+          <Button 
+            onClick={() => {
+              console.log('🧪 DEBUG: Connection status:', {
+                externalIsConnected,
+                device: !!device,
+                deviceName: device?.name,
+                deviceConnected: device?.gatt?.connected,
+                bluetoothSupported
+              });
+              toast({ 
+                title: 'Connection Status', 
+                description: `Connected: ${externalIsConnected}, Device: ${device?.name || 'None'}` 
+              });
+            }}
+            variant="outline"
+            size="sm"
+            className="w-full text-xs"
+          >
+            🔍 Check Connection
+          </Button>
+        </div>
+
+        <div className="space-y-3 lg:space-y-4 flex-1 flex flex-col">
         </div>
       </CardContent>
     </Card>
