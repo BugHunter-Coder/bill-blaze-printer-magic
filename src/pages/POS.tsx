@@ -102,6 +102,117 @@ const POS = () => {
   // Calculate total
   const cartTotal = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
 
+  // Handle order completion - save to database
+  const handleOrderComplete = async (paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', directAmount?: number) => {
+    console.log('🔍 DEBUG: POS handleOrderComplete called with:', { paymentMethod, directAmount });
+    console.log('🔍 DEBUG: User state:', { user: !!user, userId: user?.id });
+    console.log('🔍 DEBUG: Profile state:', { profile: !!profile, profileId: profile?.id });
+    console.log('🔍 DEBUG: Shop state:', { shopId: selectedShop?.id, shopName: selectedShop?.name });
+    console.log('🔍 DEBUG: Cart state:', { cartItems: cartItems.length, cartTotal });
+
+    if (!user || !profile || !selectedShop?.id) {
+      console.error('❌ DEBUG: Order failed - missing user, profile or shop:', { user: !!user, profile: !!profile, shopId: selectedShop?.id });
+      toast({
+        title: "Error",
+        description: "User not authenticated, profile not loaded, or no shop selected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const subtotal = directAmount || cartTotal;
+      const taxAmount = subtotal * (selectedShop.tax_rate || 0);
+      const totalAmount = subtotal + taxAmount;
+
+      console.log('🔍 DEBUG: Calculated amounts:', { subtotal, taxAmount, totalAmount, taxRate: selectedShop.tax_rate });
+
+      // Create transaction
+      console.log('🔍 DEBUG: Creating transaction...');
+      const { data: transaction, error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          shop_id: selectedShop.id,
+          cashier_id: profile.id,
+          type: 'sale',
+          subtotal,
+          tax_amount: taxAmount,
+          discount_amount: 0,
+          total_amount: totalAmount,
+          payment_method: paymentMethod,
+          is_direct_billing: !!directAmount,
+        })
+        .select()
+        .single();
+
+      if (transactionError) {
+        console.error('❌ DEBUG: Transaction creation failed:', transactionError);
+        throw transactionError;
+      }
+
+      console.log('✅ DEBUG: Transaction created successfully:', transaction);
+
+      // Create transaction items (if not direct billing)
+      if (!directAmount && cartItems.length > 0) {
+        console.log('🔍 DEBUG: Creating transaction items...');
+        const transactionItems = cartItems.map(item => ({
+          transaction_id: transaction.id,
+          product_id: item.id,
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.price * item.quantity,
+        }));
+
+        console.log('🔍 DEBUG: Transaction items to insert:', transactionItems);
+
+        const { error: itemsError } = await supabase
+          .from('transaction_items')
+          .insert(transactionItems);
+
+        if (itemsError) {
+          console.error('❌ DEBUG: Transaction items creation failed:', itemsError);
+          throw itemsError;
+        }
+
+        console.log('✅ DEBUG: Transaction items created successfully');
+
+        // Update product stock
+        console.log('🔍 DEBUG: Updating product stock...');
+        for (const item of cartItems) {
+          console.log('🔍 DEBUG: Updating stock for item:', { id: item.id, name: item.name, currentStock: item.stock_quantity, quantity: item.quantity });
+          const { error: stockError } = await supabase
+            .from('products')
+            .update({ 
+              stock_quantity: item.stock_quantity ? item.stock_quantity - item.quantity : 0 
+            })
+            .eq('id', item.id);
+
+          if (stockError) {
+            console.error('❌ DEBUG: Stock update error for item', item.id, ':', stockError);
+          } else {
+            console.log('✅ DEBUG: Stock updated for item:', item.id);
+          }
+        }
+      }
+
+      // Clear cart after successful transaction
+      console.log('🔍 DEBUG: Clearing cart...');
+      setCartItems([]);
+
+      console.log('✅ DEBUG: Order completed successfully!');
+      toast({
+        title: "Success",
+        description: "Order completed successfully!",
+      });
+
+    } catch (error: any) {
+      console.error('❌ DEBUG: Order completion error:', error);
+      console.error('❌ DEBUG: Error details:', { message: error.message, code: error.code, details: error.details });
+      throw error;
+    }
+  };
+
   // Check URL parameters to auto-open management
   useEffect(() => {
     const management = searchParams.get('management');
@@ -206,10 +317,7 @@ const POS = () => {
               onPrinterChange={handlePrinterChange}
               cart={cartItems}
               total={cartTotal}
-              onOrderComplete={async () => {
-                // Clear cart after order completion
-                setCartItems([]);
-              }}
+              onOrderComplete={handleOrderComplete}
               shopDetails={selectedShop}
             />
           </div>
