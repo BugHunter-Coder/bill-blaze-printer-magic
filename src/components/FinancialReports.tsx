@@ -20,7 +20,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useShop } from '@/hooks/useShop';
 import { useToast } from '@/hooks/use-toast';
-import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, Area, AreaChart } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, Area, AreaChart } from 'recharts';
 
 interface FinancialData {
   totalRevenue: number;
@@ -323,14 +323,14 @@ export const FinancialReports = () => {
           <CardContent>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
-                <Bar data={financialData.cashFlow}>
+                <BarChart data={financialData.cashFlow}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="period" />
                   <YAxis />
                   <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, 'Amount']} />
                   <Bar dataKey="inflow" fill="#10b981" name="Cash Inflow" />
                   <Bar dataKey="outflow" fill="#ef4444" name="Cash Outflow" />
-                </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>

@@ -28,7 +28,8 @@ interface StaffMember {
   name: string;
   email: string;
   phone: string;
-  role: 'owner' | 'manager' | 'cashier' | 'staff';
+  role: 'admin' | 'manager' | 'cashier';
+  updated_at: string;
   is_active: boolean;
   created_at: string;
   last_login?: string;
@@ -46,7 +47,7 @@ export const StaffManagement = () => {
     name: '',
     email: '',
     phone: '',
-    role: 'staff' as const
+    role: 'cashier' as 'admin' | 'manager' | 'cashier'
   });
 
   useEffect(() => {
@@ -61,13 +62,24 @@ export const StaffManagement = () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('staff')
+        .from('profiles')
         .select('*')
         .eq('shop_id', selectedShop.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setStaff(data || []);
+      const staffMembers = (data || []).map(profile => ({
+        id: profile.id,
+        shop_id: profile.shop_id || '',
+        name: profile.full_name || '',
+        email: profile.email || '',
+        phone: '', // Not available in profiles
+        role: profile.role || 'cashier',
+        is_active: profile.is_active || false,
+        created_at: profile.created_at || '',
+        updated_at: profile.updated_at || ''
+      }));
+      setStaff(staffMembers);
     } catch (error) {
       console.error('Error fetching staff:', error);
       toast({
@@ -85,7 +97,7 @@ export const StaffManagement = () => {
       name: '',
       email: '',
       phone: '',
-      role: 'staff'
+      role: 'cashier'
     });
     setEditingStaff(null);
   };
@@ -97,13 +109,12 @@ export const StaffManagement = () => {
     try {
       if (editingStaff) {
         // Update existing staff member
-        const { error } = await supabase
-          .from('staff')
+      const { error } = await supabase
+        .from('profiles')
           .update({
-            name: formData.name,
+            full_name: formData.name,
             email: formData.email,
-            phone: formData.phone,
-            role: formData.role,
+            role: formData.role as 'admin' | 'manager' | 'cashier',
             updated_at: new Date().toISOString()
           })
           .eq('id', editingStaff.id);
@@ -115,14 +126,13 @@ export const StaffManagement = () => {
         });
       } else {
         // Add new staff member
-        const { error } = await supabase
-          .from('staff')
+      const { error } = await supabase
+        .from('profiles')
           .insert({
             shop_id: selectedShop.id,
-            name: formData.name,
+            full_name: formData.name,
             email: formData.email,
-            phone: formData.phone,
-            role: formData.role,
+            role: formData.role as 'admin' | 'manager' | 'cashier',
             is_active: true
           });
 
@@ -162,7 +172,7 @@ export const StaffManagement = () => {
 
     try {
       const { error } = await supabase
-        .from('staff')
+        .from('profiles')
         .delete()
         .eq('id', staffId);
 
@@ -186,7 +196,7 @@ export const StaffManagement = () => {
   const handleToggleActive = async (staffMember: StaffMember) => {
     try {
       const { error } = await supabase
-        .from('staff')
+        .from('profiles')
         .update({ is_active: !staffMember.is_active })
         .eq('id', staffMember.id);
 
@@ -209,7 +219,7 @@ export const StaffManagement = () => {
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
-      case 'owner': return 'default';
+      case 'admin': return 'default';
       case 'manager': return 'secondary';
       case 'cashier': return 'outline';
       default: return 'secondary';
@@ -287,10 +297,9 @@ export const StaffManagement = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="owner">Owner</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="cashier">Cashier</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
