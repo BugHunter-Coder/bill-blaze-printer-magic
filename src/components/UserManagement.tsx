@@ -116,7 +116,7 @@ export const UserManagement = () => {
           id: authData.user.id,
           email: newUser.email,
           full_name: newUser.full_name,
-          role: newUser.role,
+          role: newUser.role as 'admin' | 'manager' | 'cashier',
           shop_id: selectedShop.id,
           is_active: true
         });
@@ -166,7 +166,7 @@ export const UserManagement = () => {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ role: newRole })
+        .update({ role: newRole as 'admin' | 'manager' | 'cashier' })
         .eq('id', userId);
 
       if (error) throw error;

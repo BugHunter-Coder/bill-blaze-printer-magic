@@ -126,9 +126,10 @@ export const StaffManagement = () => {
         });
       } else {
         // Add new staff member
-      const { error } = await supabase
-        .from('profiles')
+        const { error } = await supabase
+          .from('profiles')
           .insert({
+            id: crypto.randomUUID(),
             shop_id: selectedShop.id,
             full_name: formData.name,
             email: formData.email,

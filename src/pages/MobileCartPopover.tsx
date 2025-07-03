@@ -53,14 +53,15 @@ export default function MobileCartPopover({
       style={{ maxHeight: '65vh' }}
     >
       <div className="flex-1 overflow-y-auto p-3">
-        <Cart
-          items={cart}
-          onUpdateQuantity={onUpdateQty}
-          onRemoveItem={onRemove}
-          onClearCart={onClear}
-          total={total}
-          compact
-        />
+      <Cart
+        items={cart}
+        onUpdateQuantity={onUpdateQty}
+        onRemoveItem={onRemove}
+        onClearCart={onClear}
+        total={total}
+        shopDetails={{ name: '', tax_rate: 0.18 } as any} // Minimal shop details for mobile
+        compact
+      />
       </div>
 
       <button

@@ -13,9 +13,10 @@ interface CartProps {
   onClearCart: () => void;
   total: number;
   shopDetails: ShopDetails;
+  compact?: boolean;
 }
 
-export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails }: CartProps) => {
+export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails, compact = false }: CartProps) => {
   const tax = total * shopDetails.tax_rate;
   const finalTotal = total + tax;
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);

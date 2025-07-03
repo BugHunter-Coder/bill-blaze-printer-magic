@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
     },
     preview: {                        // Render uses this in prod
       host: '0.0.0.0',
-      port: process.env.PORT || 8080,
+      port: parseInt(process.env.PORT || '8080'),
     },
     build: {
       outDir: 'dist',

@@ -387,48 +387,66 @@ export type Database = {
       shops: {
         Row: {
           address: string | null
+          auto_backup: boolean | null
+          business_hours: Json | null
           created_at: string | null
           currency: string | null
+          description: string | null
           email: string | null
           id: string
           is_active: boolean | null
           logo_url: string | null
           name: string
+          notifications_enabled: boolean | null
           owner_id: string | null
           phone: string | null
           tax_id: string | null
           tax_rate: number | null
+          timezone: string | null
           updated_at: string | null
+          website: string | null
         }
         Insert: {
           address?: string | null
+          auto_backup?: boolean | null
+          business_hours?: Json | null
           created_at?: string | null
           currency?: string | null
+          description?: string | null
           email?: string | null
           id?: string
           is_active?: boolean | null
           logo_url?: string | null
           name: string
+          notifications_enabled?: boolean | null
           owner_id?: string | null
           phone?: string | null
           tax_id?: string | null
           tax_rate?: number | null
+          timezone?: string | null
           updated_at?: string | null
+          website?: string | null
         }
         Update: {
           address?: string | null
+          auto_backup?: boolean | null
+          business_hours?: Json | null
           created_at?: string | null
           currency?: string | null
+          description?: string | null
           email?: string | null
           id?: string
           is_active?: boolean | null
           logo_url?: string | null
           name?: string
+          notifications_enabled?: boolean | null
           owner_id?: string | null
           phone?: string | null
           tax_id?: string | null
           tax_rate?: number | null
+          timezone?: string | null
           updated_at?: string | null
+          website?: string | null
         }
         Relationships: []
       }

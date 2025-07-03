@@ -103,7 +103,7 @@ export const ShopSettings = () => {
           website: data.website || '',
           currency: data.currency || 'INR',
           timezone: data.timezone || 'Asia/Kolkata',
-          business_hours: data.business_hours || settings.business_hours,
+          business_hours: typeof data.business_hours === 'string' ? JSON.parse(data.business_hours) : (data.business_hours || settings.business_hours),
           tax_rate: data.tax_rate || 18,
           auto_backup: data.auto_backup ?? true,
           notifications_enabled: data.notifications_enabled ?? true
