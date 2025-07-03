@@ -218,6 +218,59 @@ export type Database = {
           },
         ]
       }
+      product_variants: {
+        Row: {
+          barcode: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          min_stock_level: number | null
+          name: string
+          price_modifier: number | null
+          product_id: string
+          sku: string | null
+          stock_quantity: number | null
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          barcode?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_stock_level?: number | null
+          name: string
+          price_modifier?: number | null
+          product_id: string
+          sku?: string | null
+          stock_quantity?: number | null
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          barcode?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_stock_level?: number | null
+          name?: string
+          price_modifier?: number | null
+          product_id?: string
+          sku?: string | null
+          stock_quantity?: number | null
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           barcode: string | null
@@ -283,97 +336,6 @@ export type Database = {
           },
           {
             foreignKeyName: "products_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "shops"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      product_variants: {
-        Row: {
-          barcode: string | null
-          created_at: string | null
-          id: string
-          is_active: boolean | null
-          min_stock_level: number | null
-          name: string
-          price_modifier: number | null
-          product_id: string | null
-          sku: string | null
-          stock_quantity: number | null
-          updated_at: string | null
-          value: string
-        }
-        Insert: {
-          barcode?: string | null
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          min_stock_level?: number | null
-          name: string
-          price_modifier?: number | null
-          product_id?: string | null
-          sku?: string | null
-          stock_quantity?: number | null
-          updated_at?: string | null
-          value: string
-        }
-        Update: {
-          barcode?: string | null
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          min_stock_level?: number | null
-          name?: string
-          price_modifier?: number | null
-          product_id?: string | null
-          sku?: string | null
-          stock_quantity?: number | null
-          updated_at?: string | null
-          value?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_variants_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      variant_options: {
-        Row: {
-          created_at: string | null
-          id: string
-          is_active: boolean | null
-          name: string
-          shop_id: string | null
-          updated_at: string | null
-          values: string[] | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          name: string
-          shop_id?: string | null
-          updated_at?: string | null
-          values: string[]
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          is_active?: boolean | null
-          name?: string
-          shop_id?: string | null
-          updated_at?: string | null
-          values?: string[]
-        }
-        Relationships: [
-          {
-            foreignKeyName: "variant_options_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "shops"
@@ -626,6 +588,44 @@ export type Database = {
           },
           {
             foreignKeyName: "transactions_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      variant_options: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          shop_id: string
+          updated_at: string | null
+          values: string[]
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          shop_id: string
+          updated_at?: string | null
+          values: string[]
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          shop_id?: string
+          updated_at?: string | null
+          values?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "variant_options_shop_id_fkey"
             columns: ["shop_id"]
             isOneToOne: false
             referencedRelation: "shops"

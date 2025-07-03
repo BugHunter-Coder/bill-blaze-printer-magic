@@ -162,10 +162,12 @@ export const BluetoothPrinter = ({
   const sendDataInChunks = async (
     ch: BluetoothRemoteGATTCharacteristic,
     data: Uint8Array,
-    chunk = 40
+    chunk = 20
   ) => {
     for (let i = 0; i < data.length; i += chunk) {
       await ch.writeValue(data.slice(i, i + chunk));
+      // Small delay between chunks for thermal printer reliability
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
   };
 
@@ -185,41 +187,84 @@ export const BluetoothPrinter = ({
     }
     try {
       const ascii = generateReceipt(true);
-      console.log('Receipt:', ascii);
+      console.log('Receipt to print:', ascii);
 
-      const server = await device.gatt?.connect();
-      if (!server) throw new Error('GATT connect failed');
+      // Ensure we have a fresh connection
+      const server = device.gatt?.connected ? device.gatt : await device.gatt?.connect();
+      if (!server) throw new Error('GATT connection failed');
 
+      // Find the correct service and characteristic for thermal printers
       const services = await server.getPrimaryServices();
       let writeChar: BluetoothRemoteGATTCharacteristic | null = null;
-      for (const svc of services) {
-        const chars = await svc.getCharacteristics();
-        writeChar =
-          chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) ||
-          null;
-        if (writeChar) break;
+      
+      // Common thermal printer service UUIDs
+      const thermalPrinterServices = [
+        '000018f0-0000-1000-8000-00805f9b34fb', // Common thermal printer service
+        '00001101-0000-1000-8000-00805f9b34fb', // Serial port profile
+        '0000fee7-0000-1000-8000-00805f9b34fb', // Another common service
+      ];
+
+      // First try to find a known thermal printer service
+      for (const serviceUuid of thermalPrinterServices) {
+        try {
+          const service = await server.getPrimaryService(serviceUuid);
+          const chars = await service.getCharacteristics();
+          writeChar = chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) || null;
+          if (writeChar) {
+            console.log('Found thermal printer service:', serviceUuid);
+            break;
+          }
+        } catch (e) {
+          // Service not found, continue to next
+          continue;
+        }
       }
-      if (!writeChar) throw new Error('No writable characteristic');
 
-      // Init printer, small font
-      await forceEnglish(writeChar);
+      // If no specific service found, try all services
+      if (!writeChar) {
+        for (const svc of services) {
+          const chars = await svc.getCharacteristics();
+          writeChar = chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) || null;
+          if (writeChar) break;
+        }
+      }
 
-      const payload =
-        ascii.replace(/\n/g, '\r\n') + '\n\n\n'; // lines
+      if (!writeChar) throw new Error('No writable characteristic found');
 
+      // Initialize thermal printer with specific commands
+      const initCommands = new Uint8Array([
+        0x1B, 0x40, // ESC @ - Initialize printer
+        0x1B, 0x21, 0x00, // ESC ! - Normal character mode
+        0x1B, 0x61, 0x00, // ESC a - Left align
+        0x1D, 0x21, 0x00, // GS ! - Normal size
+      ]);
+      await writeChar.writeValue(initCommands);
+
+      // Wait a bit for printer to initialize
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Convert receipt to thermal printer format
+      const payload = ascii.replace(/\n/g, '\r\n') + '\r\n\r\n\r\n';
       const bytes = new TextEncoder().encode(payload);
-      await sendDataInChunks(writeChar, bytes);
+      
+      // Send data in chunks for better reliability
+      await sendDataInChunks(writeChar, bytes, 20); // Smaller chunks for thermal printers
 
-      // back to normal font & cut
-      await resetFont(writeChar);
-      await writeChar.writeValue(new TextEncoder().encode('\x1DVA\x0A'));
+      // Wait for printing to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
 
-      toast({ title: 'Printed', description: 'Receipt sent ✅' });
+      // Send cut command for thermal printers
+      const cutCommands = new Uint8Array([
+        0x1D, 0x56, 0x41, 0x0A, // GS V A - Full cut
+      ]);
+      await writeChar.writeValue(cutCommands);
+
+      toast({ title: 'Printed Successfully', description: 'Receipt sent to thermal printer ✅' });
     } catch (e: any) {
-      console.error(e);
+      console.error('Print error:', e);
       toast({
         title: 'Print Failed',
-        description: e.message || 'Unknown error',
+        description: `Printing error: ${e.message}. Make sure the thermal printer is connected and has paper.`,
         variant: 'destructive',
       });
     }
@@ -569,8 +614,8 @@ export const BluetoothPrinter = ({
   }
 
   return (
-    <Card className="m-2 lg:m-3 h-full flex flex-col bg-white border-0 shadow-none">
-      <CardHeader className="pb-2 lg:pb-3 flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-t-lg">
+    <Card className="w-full h-full flex flex-col bg-white border border-gray-200 shadow-sm overflow-hidden">
+      <CardHeader className="pb-2 lg:pb-3 flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white">
         <CardTitle className="flex items-center text-sm lg:text-base">
           <div className="bg-white/20 rounded-full p-1 lg:p-1.5 mr-2 lg:mr-3">
             <CreditCard className="h-3 w-3 lg:h-4 lg:w-4 text-white" />
@@ -578,7 +623,7 @@ export const BluetoothPrinter = ({
           <div className="flex-1">
             <div className="font-bold text-sm lg:text-base">Payment & Checkout</div>
             <div className="text-xs lg:text-sm text-green-200">
-              Complete your order
+              {externalIsConnected ? 'Thermal printer ready' : 'Connect thermal printer'}
             </div>
           </div>
         </CardTitle>

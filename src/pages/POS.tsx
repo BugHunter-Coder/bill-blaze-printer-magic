@@ -301,10 +301,10 @@ export default function POS() {
             id="cartDrawer"
             className="
               bg-white shadow-2xl border-l flex flex-col
-              md:sticky md:top-[64px] md:self-start
-              md:h-[calc(100vh-64px)]
+              md:sticky md:top-0 md:self-start
+              md:h-screen
               md:overflow-hidden
-              fixed inset-x-0 bottom-0 max-h-[90vh] h-auto rounded-t-2xl
+              fixed inset-x-0 bottom-0 max-h-[85vh] h-auto rounded-t-2xl
               translate-y-full md:translate-y-0
               transition-transform duration-300
               data-[open='true']:translate-y-0
@@ -332,7 +332,7 @@ export default function POS() {
             </div>
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-2 pb-2 pt-1 space-y-2">
+            <div className="flex-1 overflow-y-auto px-3 pb-3 pt-2 space-y-3">
               <Cart
                 items={cart}
                 onUpdateQuantity={updateQty}
@@ -351,7 +351,7 @@ export default function POS() {
             </div>
 
             {/* Footer/Payment - sticky bottom */}
-            <div className="border-t px-2 py-3 bg-white sticky bottom-0 z-10 rounded-b-2xl">
+            <div className="border-t px-3 py-3 bg-white sticky bottom-0 z-10 rounded-b-2xl">
               <BluetoothPrinter
                 isConnected={printerOK}
                 onConnectionChange={setPrinterOK}
