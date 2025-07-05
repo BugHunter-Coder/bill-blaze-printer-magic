@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {                         // local dev only
       host: true,
-      port: 5173,
+      port: 8080,
       strictPort: true,
       open: isDev,
     },
