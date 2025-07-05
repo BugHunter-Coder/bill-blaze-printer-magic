@@ -9,7 +9,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { CartPanel } from './CartPanel';
+import { BluetoothPrinter } from '@/components/BluetoothPrinter';
+import { Cart } from '@/components/Cart';
 
 interface MobileCartProps {
   cart: CartItem[];
@@ -19,10 +20,11 @@ interface MobileCartProps {
   onUpdateQuantity: (id: string, quantity: number) => void;
   onRemoveItem: (id: string) => void;
   onClearCart: () => void;
-  onCompleteOrder: (method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', amount?: number) => void;
+  onCompleteOrder: (method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other', amount?: number) => Promise<void>;
   shopDetails: Shop;
   printerConnected: boolean;
   onPrinterToggle: (connected: boolean) => void;
+  onPrinterChange: (device: BluetoothDevice | null) => void;
 }
 
 export function MobileCart({
@@ -36,7 +38,8 @@ export function MobileCart({
   onCompleteOrder,
   shopDetails,
   printerConnected,
-  onPrinterToggle
+  onPrinterToggle,
+  onPrinterChange
 }: MobileCartProps) {
   return (
     <div className="lg:hidden">
@@ -68,21 +71,35 @@ export function MobileCart({
               </div>
             </SheetHeader>
             
-            <div className="flex-1 overflow-hidden">
-              <CartPanel
-                cart={cart}
-                total={total}
-                onUpdateQuantity={onUpdateQuantity}
-                onRemoveItem={onRemoveItem}
-                onClearCart={onClearCart}
-                onCompleteOrder={(method, amount) => {
-                  onCompleteOrder(method, amount);
-                  onToggle(false);
-                }}
-                shopDetails={shopDetails}
-                printerConnected={printerConnected}
-                onPrinterToggle={onPrinterToggle}
-              />
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {/* Cart Items */}
+              <div className="flex-1 overflow-auto">
+                <Cart
+                  items={cart}
+                  onUpdateQuantity={onUpdateQuantity}
+                  onRemoveItem={onRemoveItem}
+                  onClearCart={onClearCart}
+                  total={total}
+                  shopDetails={shopDetails}
+                  compact
+                />
+              </div>
+              
+              {/* Checkout */}
+              <div className="flex-shrink-0 border-t border-border">
+                <BluetoothPrinter
+                  isConnected={printerConnected}
+                  onConnectionChange={onPrinterToggle}
+                  onPrinterChange={onPrinterChange}
+                  cart={cart}
+                  total={total}
+                  onOrderComplete={async (method, amount) => {
+                    await onCompleteOrder(method, amount);
+                    onToggle(false);
+                  }}
+                  shopDetails={shopDetails}
+                />
+              </div>
             </div>
           </div>
         </SheetContent>

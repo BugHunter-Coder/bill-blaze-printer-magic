@@ -76,7 +76,7 @@ export function useCart(shop: Shop | null) {
   const completeOrder = async (
     paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
     directAmount?: number
-  ) => {
+  ): Promise<void> => {
     if (!user || !shop) {
       toast({
         title: "Error",

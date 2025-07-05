@@ -3,10 +3,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/hooks/useShop';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ProductGrid } from './ProductGrid';
-import { CartPanel } from './CartPanel';
 import { MobileCart } from './MobileCart';
 import { POSHeader } from './POSHeader';
 import { useCart } from './useCart';
+import { BluetoothPrinter } from '@/components/BluetoothPrinter';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -27,6 +27,7 @@ export default function POSLayout() {
 
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [printerConnected, setPrinterConnected] = useState(false);
+  const [printerDevice, setPrinterDevice] = useState<BluetoothDevice | null>(null);
 
   if (loading || shopLoading) {
     return (
@@ -70,18 +71,16 @@ export default function POSLayout() {
           <ProductGrid onAddToCart={addToCart} />
         </div>
 
-        {/* Desktop Cart Panel */}
+        {/* Desktop Printer & Checkout */}
         <div className="hidden lg:block w-96 border-l border-border bg-card">
-          <CartPanel
+          <BluetoothPrinter
+            isConnected={printerConnected}
+            onConnectionChange={setPrinterConnected}
+            onPrinterChange={setPrinterDevice}
             cart={cart}
             total={total}
-            onUpdateQuantity={updateQuantity}
-            onRemoveItem={removeItem}
-            onClearCart={clearCart}
-            onCompleteOrder={completeOrder}
+            onOrderComplete={completeOrder}
             shopDetails={selectedShop}
-            printerConnected={printerConnected}
-            onPrinterToggle={setPrinterConnected}
           />
         </div>
       </div>
@@ -99,6 +98,7 @@ export default function POSLayout() {
         shopDetails={selectedShop}
         printerConnected={printerConnected}
         onPrinterToggle={setPrinterConnected}
+        onPrinterChange={setPrinterDevice}
       />
     </div>
   );
