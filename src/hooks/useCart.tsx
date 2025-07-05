@@ -1,17 +1,95 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Product, CartItem, Shop } from '@/types/pos';
 
+const CART_STORAGE_KEY = 'pos_cart';
+
 export function useCart(shop: Shop | null) {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [cart, setCart] = useState<CartItem[]>([]);
+  const previousShopId = useRef<string | null>(null);
 
-  // Clear cart when shop changes
+  // Load cart from localStorage on mount and handle shop changes
   useEffect(() => {
-    setCart([]);
+    console.log('🛒 useCart: Shop changed to:', shop?.id, 'Previous shop:', previousShopId.current);
+    
+    if (shop?.id) {
+      const storedCart = localStorage.getItem(`${CART_STORAGE_KEY}_${shop.id}`);
+      console.log('🛒 useCart: Stored cart for shop', shop.id, ':', storedCart);
+      
+      // If shop changed, clear cart first
+      if (previousShopId.current && previousShopId.current !== shop.id) {
+        console.log('🛒 useCart: Shop changed, clearing cart');
+        setCart([]);
+      }
+      
+      // Load cart from storage
+      if (storedCart) {
+        try {
+          const parsedCart = JSON.parse(storedCart);
+          console.log('🛒 useCart: Loading cart from storage:', parsedCart);
+          setCart(parsedCart);
+        } catch (error) {
+          console.error('Error parsing stored cart:', error);
+          localStorage.removeItem(`${CART_STORAGE_KEY}_${shop.id}`);
+          setCart([]);
+        }
+      } else {
+        // No stored cart for this shop, start with empty cart
+        console.log('🛒 useCart: No stored cart found, starting with empty cart');
+        setCart([]);
+      }
+      
+      // Update previous shop ID
+      previousShopId.current = shop.id;
+    } else {
+      // No shop selected, clear cart
+      console.log('🛒 useCart: No shop selected, clearing cart');
+      setCart([]);
+      previousShopId.current = null;
+    }
+  }, [shop?.id]);
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    console.log('🛒 useCart: Cart changed, saving to localStorage. Shop:', shop?.id, 'Cart length:', cart.length);
+    
+    if (shop?.id && cart.length > 0) {
+      localStorage.setItem(`${CART_STORAGE_KEY}_${shop.id}`, JSON.stringify(cart));
+      console.log('🛒 useCart: Saved cart to localStorage:', cart);
+    } else if (shop?.id && cart.length === 0) {
+      // Remove empty cart from storage
+      localStorage.removeItem(`${CART_STORAGE_KEY}_${shop.id}`);
+      console.log('🛒 useCart: Removed empty cart from localStorage');
+    }
+  }, [cart, shop?.id]);
+
+  // Listen for storage changes from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith(CART_STORAGE_KEY) && shop?.id) {
+        const cartShopId = e.key.replace(`${CART_STORAGE_KEY}_`, '');
+        if (cartShopId === shop.id) {
+          if (e.newValue) {
+            try {
+              const newCart = JSON.parse(e.newValue);
+              setCart(newCart);
+            } catch (error) {
+              console.error('Error parsing cart from storage event:', error);
+            }
+          } else {
+            // Cart was cleared in another tab
+            setCart([]);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [shop?.id]);
 
   const addToCart = (product: Product) => {
@@ -69,6 +147,9 @@ export function useCart(shop: Shop | null) {
 
   const clearCart = () => {
     setCart([]);
+    if (shop?.id) {
+      localStorage.removeItem(`${CART_STORAGE_KEY}_${shop.id}`);
+    }
   };
 
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -162,4 +243,4 @@ export function useCart(shop: Shop | null) {
     clearCart,
     completeOrder
   };
-}
+} 

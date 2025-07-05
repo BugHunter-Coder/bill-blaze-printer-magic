@@ -14,9 +14,10 @@ interface CartProps {
   total: number;
   shopDetails: ShopDetails;
   compact?: boolean;
+  onProceedToCheckout?: () => void;
 }
 
-export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails, compact = false }: CartProps) => {
+export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails, compact = false, onProceedToCheckout }: CartProps) => {
   const tax = total * shopDetails.tax_rate;
   const finalTotal = total + tax;
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);
@@ -177,6 +178,15 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
                   <div className="flex gap-1">
                     <Button variant="outline" size="sm" onClick={onClearCart} className="text-red-600 border-red-200 px-2 py-1 h-7">Clear</Button>
                     <Button variant="outline" size="sm" className="px-2 py-1 h-7">Hold</Button>
+                    {onProceedToCheckout && (
+                      <Button 
+                        size="sm" 
+                        onClick={onProceedToCheckout}
+                        className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-7"
+                      >
+                        Checkout
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-between text-xs px-1 mb-1">

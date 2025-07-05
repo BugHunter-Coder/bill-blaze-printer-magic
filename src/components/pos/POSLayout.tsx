@@ -1,19 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/hooks/useShop';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ProductGrid } from './ProductGrid';
 import { MobileCart } from './MobileCart';
 import { POSHeader } from './POSHeader';
-import { useCart } from './useCart';
+import { useCart } from '@/hooks/useCart';
+import { usePOSState } from '@/hooks/usePOSState';
+import { usePageVisibility } from '@/hooks/usePageVisibility';
 import { BluetoothPrinter } from '@/components/BluetoothPrinter';
+import { Cart } from '@/components/Cart';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PaymentCheckoutModal } from './PaymentCheckoutModal';
+import { useToast } from '@/hooks/use-toast';
 
 export default function POSLayout() {
   const { user, loading } = useAuth();
   const { selectedShop, loading: shopLoading } = useShop();
   const navigate = useNavigate();
+  const isPageVisible = usePageVisibility();
+  const { toast } = useToast();
   
   const {
     cart,
@@ -25,9 +32,29 @@ export default function POSLayout() {
     completeOrder
   } = useCart(selectedShop);
 
-  const [mobileCartOpen, setMobileCartOpen] = useState(false);
-  const [printerConnected, setPrinterConnected] = useState(false);
+  // Use persistent state for session data
+  const {
+    printerConnected,
+    checkoutModalOpen,
+    mobileCartOpen,
+    setPrinterConnected,
+    setCheckoutModalOpen,
+    setMobileCartOpen,
+  } = usePOSState(selectedShop?.id);
+
+  // Local state for printer device (can't be serialized)
   const [printerDevice, setPrinterDevice] = useState<BluetoothDevice | null>(null);
+
+  // Handle page visibility changes
+  useEffect(() => {
+    if (isPageVisible) {
+      // Page became visible - could trigger any necessary refreshes
+      console.log('POS page became visible');
+    } else {
+      // Page became hidden - ensure state is saved
+      console.log('POS page became hidden');
+    }
+  }, [isPageVisible]);
 
   if (loading || shopLoading) {
     return (
@@ -56,6 +83,19 @@ export default function POSLayout() {
     );
   }
 
+  const handleProceedToCheckout = () => {
+    if (cart.length === 0) return;
+    setCheckoutModalOpen(true);
+  };
+
+  const handleCheckoutComplete = async (
+    paymentMethod: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
+    directAmount?: number
+  ) => {
+    await completeOrder(paymentMethod, directAmount);
+    setCheckoutModalOpen(false);
+  };
+
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
       <POSHeader 
@@ -63,6 +103,8 @@ export default function POSLayout() {
         user={user}
         printerConnected={printerConnected}
         onPrinterToggle={setPrinterConnected}
+        onPrinterChange={setPrinterDevice}
+        printerDevice={printerDevice}
       />
       
       <div className="flex-1 flex overflow-hidden">
@@ -71,17 +113,23 @@ export default function POSLayout() {
           <ProductGrid onAddToCart={addToCart} />
         </div>
 
-        {/* Desktop Printer & Checkout */}
-        <div className="hidden lg:block w-96 border-l border-border bg-card">
-          <BluetoothPrinter
-            isConnected={printerConnected}
-            onConnectionChange={setPrinterConnected}
-            onPrinterChange={setPrinterDevice}
-            cart={cart}
-            total={total}
-            onOrderComplete={completeOrder}
-            shopDetails={selectedShop}
-          />
+        {/* Desktop Cart Only (no payment section here) */}
+        <div className="hidden lg:flex w-96 border-l border-border bg-card">
+          <div className="flex-1 flex flex-col">
+            {/* Cart Items */}
+            <div className="flex-1 overflow-hidden">
+              <Cart
+                items={cart}
+                onUpdateQuantity={updateQuantity}
+                onRemoveItem={removeItem}
+                onClearCart={clearCart}
+                total={total}
+                shopDetails={selectedShop}
+                compact={false}
+                onProceedToCheckout={handleProceedToCheckout}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -94,11 +142,25 @@ export default function POSLayout() {
         onUpdateQuantity={updateQuantity}
         onRemoveItem={removeItem}
         onClearCart={clearCart}
-        onCompleteOrder={completeOrder}
+        onCompleteOrder={handleCheckoutComplete}
         shopDetails={selectedShop}
         printerConnected={printerConnected}
         onPrinterToggle={setPrinterConnected}
         onPrinterChange={setPrinterDevice}
+      />
+
+      {/* Payment Checkout Modal */}
+      <PaymentCheckoutModal
+        isOpen={checkoutModalOpen}
+        onClose={() => setCheckoutModalOpen(false)}
+        cart={cart}
+        total={total}
+        shopDetails={selectedShop}
+        onCompleteOrder={handleCheckoutComplete}
+        printerConnected={printerConnected}
+        onPrinterChange={setPrinterDevice}
+        printerDevice={printerDevice}
+        toast={toast}
       />
     </div>
   );
