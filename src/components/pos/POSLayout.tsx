@@ -152,6 +152,7 @@ export default function POSLayout() {
         onPrinterChange={setPrinterDevice}
         printerDevice={printerDevice}
         toast={toast}
+        onRemoveItem={removeItem}
       />
     </div>
   );

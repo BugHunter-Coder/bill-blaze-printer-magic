@@ -17,6 +17,8 @@ import {
   BluetoothConnected
 } from 'lucide-react';
 import { printReceiptToBluetoothPrinter } from '@/lib/utils';
+import { useMediaQuery } from 'react-responsive';
+import React from 'react';
 
 interface PaymentCheckoutModalProps {
   isOpen: boolean;
@@ -32,6 +34,7 @@ interface PaymentCheckoutModalProps {
   onPrinterChange: (device: BluetoothDevice | null) => void;
   printerDevice: BluetoothDevice | null;
   toast: (args: { title: string; description?: string; variant?: string }) => void;
+  onRemoveItem: (itemId: string) => void;
 }
 
 export function PaymentCheckoutModal({
@@ -44,13 +47,16 @@ export function PaymentCheckoutModal({
   printerConnected,
   onPrinterChange,
   printerDevice,
-  toast
+  toast,
+  onRemoveItem
 }: PaymentCheckoutModalProps) {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'>('cash');
   const [directAmount, setDirectAmount] = useState('');
   const [isDirectBilling, setIsDirectBilling] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
 
   const tax = total * (shopDetails?.tax_rate || 0);
   const finalTotal = total + tax;
@@ -195,6 +201,14 @@ export function PaymentCheckoutModal({
                           </span>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        className="ml-2 text-red-500 hover:text-red-700 p-1 rounded"
+                        aria-label="Remove item"
+                        onClick={() => onRemoveItem(itemId)}
+                      >
+                        ×
+                      </button>
                     </div>
                   );
                 })}
@@ -224,29 +238,70 @@ export function PaymentCheckoutModal({
             {/* Payment Method Selection */}
             <div>
               <div className="font-semibold mb-1">Payment</div>
-              <div className="space-y-2">
-                {paymentMethods.map((method) => {
-                  const Icon = method.icon;
-                  return (
-                    <button
-                      key={method.value}
-                      onClick={() => setPaymentMethod(method.value as any)}
-                      className={`w-full p-3 rounded border text-left flex items-center gap-2 text-sm ${
-                        paymentMethod === method.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      style={{ minHeight: 48 }}
-                    >
-                      <span className={`rounded ${method.color} p-1`}><Icon className="h-4 w-4" /></span>
-                      <span className="font-medium">{method.label}</span>
-                      {paymentMethod === method.value && (
-                        <CheckCircle className="h-4 w-4 text-blue-600 ml-auto" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              {isMobile ? (
+                <div className="relative">
+                  <button
+                    className={`w-full p-3 rounded border text-left flex items-center gap-2 text-base border-blue-500 bg-blue-50`}
+                    onClick={() => setPaymentDropdownOpen((v) => !v)}
+                  >
+                    <span className={`rounded ${paymentMethods.find(m => m.value === paymentMethod)?.color} p-1`}>
+                      {paymentMethods.find(m => m.value === paymentMethod)?.icon &&
+                        React.createElement(paymentMethods.find(m => m.value === paymentMethod)!.icon, { className: 'h-4 w-4' })}
+                    </span>
+                    <span className="font-medium">{paymentMethods.find(m => m.value === paymentMethod)?.label}</span>
+                    <ChevronDown className="h-4 w-4 ml-auto" />
+                  </button>
+                  {paymentDropdownOpen && (
+                    <div className="absolute left-0 right-0 mt-2 bg-white border rounded shadow-lg z-20">
+                      {paymentMethods.map((method) => {
+                        const Icon = method.icon;
+                        return (
+                          <button
+                            key={method.value}
+                            onClick={() => {
+                              setPaymentMethod(method.value as any);
+                              setPaymentDropdownOpen(false);
+                            }}
+                            className={`w-full p-3 rounded border-0 text-left flex items-center gap-2 text-base hover:bg-blue-50 ${
+                              paymentMethod === method.value ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <span className={`rounded ${method.color} p-1`}><Icon className="h-4 w-4" /></span>
+                            <span className="font-medium">{method.label}</span>
+                            {paymentMethod === method.value && (
+                              <CheckCircle className="h-4 w-4 text-blue-600 ml-auto" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {paymentMethods.map((method) => {
+                    const Icon = method.icon;
+                    return (
+                      <button
+                        key={method.value}
+                        onClick={() => setPaymentMethod(method.value as any)}
+                        className={`w-full p-3 rounded border text-left flex items-center gap-2 text-sm ${
+                          paymentMethod === method.value
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        style={{ minHeight: 48 }}
+                      >
+                        <span className={`rounded ${method.color} p-1`}><Icon className="h-4 w-4" /></span>
+                        <span className="font-medium">{method.label}</span>
+                        {paymentMethod === method.value && (
+                          <CheckCircle className="h-4 w-4 text-blue-600 ml-auto" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             {/* Direct Billing Option */}
             <div className="flex items-center gap-2 mt-1">
