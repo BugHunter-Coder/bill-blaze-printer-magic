@@ -52,7 +52,39 @@ export function POSHeader({
     // Load stored printer
     const stored = getStoredPrinter();
     setStoredPrinter(stored);
-  }, []);
+    // On mount or tab focus, check if device is still connected
+    const checkConnection = () => {
+      if (printerDevice && printerDevice.gatt) {
+        if (!printerDevice.gatt.connected) {
+          onPrinterToggle(false);
+          onPrinterChange(null);
+        }
+      } else {
+        onPrinterToggle(false);
+        onPrinterChange(null);
+      }
+    };
+    window.addEventListener('visibilitychange', checkConnection);
+    checkConnection();
+    return () => {
+      window.removeEventListener('visibilitychange', checkConnection);
+    };
+  }, [printerDevice]);
+
+  // Always register gattserverdisconnected event
+  useEffect(() => {
+    if (printerDevice && printerDevice.gatt) {
+      const handleDisconnect = () => {
+        onPrinterToggle(false);
+        onPrinterChange(null);
+        toast({ title: 'Printer Disconnected', variant: 'destructive' });
+      };
+      printerDevice.addEventListener('gattserverdisconnected', handleDisconnect);
+      return () => {
+        printerDevice.removeEventListener('gattserverdisconnected', handleDisconnect);
+      };
+    }
+  }, [printerDevice]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

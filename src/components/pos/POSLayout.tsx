@@ -137,16 +137,7 @@ export default function POSLayout() {
       <MobileCart
         cart={cart}
         total={total}
-        isOpen={mobileCartOpen}
-        onToggle={setMobileCartOpen}
-        onUpdateQuantity={updateQuantity}
-        onRemoveItem={removeItem}
-        onClearCart={clearCart}
-        onCompleteOrder={handleCheckoutComplete}
-        shopDetails={selectedShop}
-        printerConnected={printerConnected}
-        onPrinterToggle={setPrinterConnected}
-        onPrinterChange={setPrinterDevice}
+        onOpenCheckout={() => setCheckoutModalOpen(true)}
       />
 
       {/* Payment Checkout Modal */}
