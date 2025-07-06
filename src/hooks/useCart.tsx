@@ -142,10 +142,17 @@ export function useCart(shop: Shop | null) {
   };
 
   const clearCart = () => {
+    console.log('🛒 clearCart called - clearing cart state and localStorage');
+    console.log('🛒 Before clear - cart length:', cart.length, 'shop ID:', shop?.id);
+    
     setCart([]);
+    
     if (shop?.id) {
       localStorage.removeItem(`${CART_STORAGE_KEY}_${shop.id}`);
+      console.log('🛒 Removed cart from localStorage for shop:', shop.id);
     }
+    
+    console.log('🛒 After clear - cart should be empty');
   };
 
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);

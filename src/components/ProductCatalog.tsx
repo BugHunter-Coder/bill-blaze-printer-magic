@@ -70,6 +70,23 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
     loadVariantsForProducts();
   }, [products, singleClickMode]);
 
+  // Set default variant (prefer 'Full', else first) when products or productVariants change
+  useEffect(() => {
+    if (products && products.length > 0 && productVariants.length > 0) {
+      const newDefaults: Record<string, ProductVariant> = {};
+      products.forEach((product) => {
+        if (product.has_variants) {
+          const variantsForProduct = productVariants.filter(v => v.product_id === product.id);
+          if (variantsForProduct.length > 0) {
+            const defaultVar = variantsForProduct.find(v => v.value.toLowerCase() === 'full') || variantsForProduct[0];
+            newDefaults[product.id] = defaultVar;
+          }
+        }
+      });
+      setSelectedVariantForProduct(newDefaults);
+    }
+  }, [products, productVariants]);
+
   const fetchProducts = async () => {
     if (!selectedShopId) return;
     
@@ -203,34 +220,25 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
   const handleAddToCart = async (product: DatabaseProduct) => {
     console.log('ProductCatalog handleAddToCart called with:', product); // Debug log
     if (product.has_variants) {
-      if (singleClickMode) {
-        // In single-click mode, check if user has selected a variant
-        const selectedVariant = selectedVariantForProduct[product.id];
-        if (selectedVariant) {
-          // User has selected a variant, add that one
-          const convertedProduct = convertToProduct(product, selectedVariant);
-          console.log('Adding selected variant to cart:', convertedProduct); // Debug log
+      const selectedVariant = selectedVariantForProduct[product.id];
+      if (selectedVariant) {
+        const convertedProduct = convertToProduct(product, selectedVariant);
+        console.log('Adding selected variant to cart:', convertedProduct); // Debug log
+        onAddToCart(convertedProduct);
+      } else {
+        // No variant selected, automatically add the first available variant
+        const variants = productVariants.filter(v => v.product_id === product.id);
+        const firstAvailableVariant = variants.find(variant => variant.stock_quantity > 0);
+        if (firstAvailableVariant) {
+          const convertedProduct = convertToProduct(product, firstAvailableVariant);
+          console.log('Adding first available variant to cart:', convertedProduct); // Debug log
           onAddToCart(convertedProduct);
         } else {
-          // No variant selected, automatically add the first available variant
-          const variants = await fetchProductVariants(product.id);
-          const firstAvailableVariant = variants.find(variant => variant.stock_quantity > 0);
-          if (firstAvailableVariant) {
-            const convertedProduct = convertToProduct(product, firstAvailableVariant);
-            console.log('Adding first available variant to cart:', convertedProduct); // Debug log
-            onAddToCart(convertedProduct);
-          } else {
-            // If no variants available, add base product
-            const convertedProduct = convertToProduct(product);
-            console.log('Adding base product to cart (no variants available):', convertedProduct); // Debug log
-            onAddToCart(convertedProduct);
-          }
+          // If no variants available, add base product
+          const convertedProduct = convertToProduct(product);
+          console.log('Adding base product to cart (no variants available):', convertedProduct); // Debug log
+          onAddToCart(convertedProduct);
         }
-      } else {
-        // Traditional modal approach
-        setSelectedProduct(product);
-        fetchProductVariants(product.id);
-        setShowVariantModal(true);
       }
     } else {
       const convertedProduct = convertToProduct(product);
@@ -421,12 +429,11 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
                           {/* Price & Stock Row */}
                           <div className="flex items-center justify-between mt-3">
                             <span className="text-lg font-bold text-green-700">
-                              {product.has_variants && !selectedVariantForProduct[product.id] ? (
-                                <Skeleton className="h-5 w-14" />
-                              ) : product.has_variants && selectedVariantForProduct[product.id] 
-                                ? `₹${getOptionPrice(selectedVariantForProduct[product.id], product.price).toFixed(2)}`
-                                : `₹${product.price.toFixed(2)}`
-                              }
+                              {product.has_variants && selectedVariantForProduct[product.id] ? (
+                                `₹${(product.price + (selectedVariantForProduct[product.id]?.price_modifier || 0)).toFixed(2)}`
+                              ) : (
+                                `₹${product.price.toFixed(2)}`
+                              )}
                             </span>
                             <Badge 
                               variant={product.has_variants ? "default" : (product.stock_quantity > 0 ? "default" : "destructive")}
@@ -440,7 +447,7 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
                             {singleClickMode ? (
                               <button
                                 className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center transition"
-                                onClick={() => handleAddToCart(product).catch(console.error)}
+                                onClick={() => handleAddToCart(product)}
                                 disabled={product.has_variants ? !selectedVariantForProduct[product.id] : product.stock_quantity === 0}
                               >
                                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -453,7 +460,7 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
                               </button>
                             ) : (
                               <Button
-                                onClick={() => handleAddToCart(product).catch(console.error)}
+                                onClick={() => handleAddToCart(product)}
                                 className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center mt-1"
                                 size="sm"
                                 disabled={product.has_variants ? false : product.stock_quantity === 0}

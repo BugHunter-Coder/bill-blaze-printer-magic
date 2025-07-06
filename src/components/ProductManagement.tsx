@@ -258,6 +258,13 @@ export const ProductManagement = () => {
             const prices = variantPrices.split('|').map((price: string) => parseFloat(price.trim()) || 0);
             const stocks = variantStocks.split('|').map((stock: string) => parseInt(stock.trim()) || 0);
 
+            // Find the 'Full' price (or use the first as fallback)
+            const fullIndex = options.findIndex((opt: string) => opt.toLowerCase() === 'full');
+            const fullPrice = fullIndex !== -1 ? prices[fullIndex] : prices[0];
+
+            // Set the product base price to the 'Full' price
+            productData.price = fullPrice;
+
             if (options.length === prices.length) {
               // Create variant option (e.g., "Size" with values ["Half Plate", "Full Plate"])
               const optionName = "Size"; // Default option name for restaurant-style variants
@@ -295,14 +302,18 @@ export const ProductManagement = () => {
                 const optionPrice = prices[i];
                 const optionStock = stocks[i] !== undefined ? stocks[i] : 0;
 
-                // Create product variant
+                // Calculate price_modifier as the difference from full price
+                let priceModifier = optionPrice - fullPrice;
+                if (isNaN(priceModifier)) priceModifier = 0;
+
+                // Always use the price_modifier value as (variant price - full price)
                 const { error: variantError } = await supabase
                   .from('product_variants')
                   .insert({
                     product_id: product.id,
                     name: optionName,
                     value: optionValue,
-                    price_modifier: optionPrice, // Use price_modifier for complete pricing
+                    price_modifier: priceModifier, // <-- Always (variant price - full price)
                     stock_quantity: optionStock,
                   });
 
