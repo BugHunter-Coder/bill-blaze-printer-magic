@@ -166,10 +166,14 @@ export default function POSLayout() {
     directAmount?: number
   ) => {
     try {
+      console.log('🛒 Starting checkout process...', { cartLength: cart.length, method, directAmount });
+      
       // Calculate amounts
       const subtotal = directAmount || total;
       const taxAmount = subtotal * (selectedShop?.tax_rate || 0);
       const totalAmount = subtotal + taxAmount;
+
+      console.log('🛒 Calculated amounts:', { subtotal, taxAmount, totalAmount });
 
       // Insert transaction
       const { data: transaction, error: transactionError } = await supabase
@@ -189,9 +193,12 @@ export default function POSLayout() {
         .single();
 
       if (transactionError) {
+        console.error('❌ Transaction failed:', transactionError);
         toast({ title: 'Transaction Failed', description: transactionError.message, variant: 'destructive' });
         return;
       }
+
+      console.log('✅ Transaction created:', transaction.id);
 
       // Insert transaction items
       if (!directAmount && cart.length > 0) {
@@ -203,13 +210,21 @@ export default function POSLayout() {
           unit_price: item.price,
           total_price: item.price * item.quantity,
         }));
+        
+        console.log('🛒 Inserting transaction items:', transactionItems.length);
+        
         const { error: itemsError } = await supabase
           .from('transaction_items')
           .insert(transactionItems);
+          
         if (itemsError) {
+          console.error('❌ Transaction items failed:', itemsError);
           toast({ title: 'Transaction Items Failed', description: itemsError.message, variant: 'destructive' });
           return;
         }
+
+        console.log('✅ Transaction items inserted');
+
         // Update product stock
         for (const item of cart) {
           const { error: stockError } = await supabase
@@ -217,16 +232,28 @@ export default function POSLayout() {
             .update({ stock_quantity: item.stock_quantity ? item.stock_quantity - item.quantity : 0 })
             .eq('id', item.id);
           if (stockError) {
+            console.error('⚠️ Stock update failed for item:', item.id, stockError);
             toast({ title: 'Stock Update Failed', description: stockError.message, variant: 'destructive' });
           }
         }
       }
 
+      console.log('✅ All database operations completed successfully');
+
       // Clear cart after successful transaction
+      console.log('🛒 Clearing cart...', { cartLength: cart.length });
       clearCart();
+      console.log('🛒 Cart cleared, closing modal');
       setCartModalOpen(false);
-      toast({ title: 'Order Completed', description: 'Payment processed and saved!' });
+      
+      // Force a small delay to ensure state updates
+      setTimeout(() => {
+        console.log('🛒 Final cart state check:', { cartLength: cart.length });
+      }, 100);
+      
+      toast({ title: 'Order Completed', description: 'Payment processed and cart cleared!' });
     } catch (err: any) {
+      console.error('❌ Checkout failed:', err);
       toast({ title: 'Order Failed', description: err.message || String(err), variant: 'destructive' });
     }
   };
