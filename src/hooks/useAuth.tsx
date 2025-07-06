@@ -25,20 +25,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     try {
+      console.log('Fetching profile for user:', userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
       
-      if (error && error.code !== 'PGRST116') {
+      if (error && error.code === 'PGRST116') {
+        // No profile found, create one
+        console.log('No profile found, creating new profile for user:', userId);
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ 
+            id: userId,
+            role: 'cashier',
+            is_active: true
+          });
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+          setProfile(null);
+          return;
+        }
+        // Try fetching again
+        const { data: newProfile, error: fetchError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (fetchError) {
+          console.error('Error fetching newly created profile:', fetchError);
+          setProfile(null);
+          return;
+        }
+        
+        console.log('Successfully created and fetched profile:', newProfile);
+        setProfile(newProfile);
+        return;
+      } else if (error) {
         console.error('Error fetching profile:', error);
+        setProfile(null);
         return;
       }
       
+      console.log('Successfully fetched existing profile:', data);
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
+      setProfile(null);
     }
   };
 

@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { CartItem, Shop } from '@/types/pos';
-import { storePrinter, getStoredPrinter, clearStoredPrinter, StoredPrinter } from '@/lib/utils';
+import { thermalPrinter, type StoredPrinter } from '@/lib/ThermalPrinter';
+import printerManager from '@/lib/PrinterManager';
 
 /* 🔤 Swap ₹→Rs + strip non-ASCII */
 const sanitizeForPrinter = (txt: string) =>
@@ -28,15 +29,12 @@ const sanitizeForPrinter = (txt: string) =>
 
 interface BluetoothPrinterProps {
   isConnected: boolean;
-  onConnectionChange: (isConnected: boolean) => void;
+  onConnectionChange: (connected: boolean) => void;
   onPrinterChange: (device: BluetoothDevice | null) => void;
   cart: CartItem[];
   total: number;
-  onOrderComplete: (
-    method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
-    directAmount?: number
-  ) => Promise<void>;
-  shopDetails: Shop;
+  onOrderComplete: () => void;
+  shopDetails: Shop | null;
 }
 
 export const BluetoothPrinter = ({ 
@@ -48,7 +46,6 @@ export const BluetoothPrinter = ({
   onOrderComplete,
   shopDetails,
 }: BluetoothPrinterProps) => {
-  const [device, setDevice] = useState<BluetoothDevice | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -63,297 +60,44 @@ export const BluetoothPrinter = ({
   const { toast } = useToast();
 
   useEffect(() => {
-    const ua = navigator.userAgent;
-    const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      ua
-    );
-    const iOS =
-      /iPad|iPhone|iPod/.test(ua) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    setIsMobile(mobile);
-    setIsIOS(iOS);
-    setBluetoothSupported('bluetooth' in navigator && !iOS);
+    // Set up system checks
+    setIsMobile(thermalPrinter.isMobile());
+    setIsIOS(thermalPrinter.isIOS());
+    setBluetoothSupported(thermalPrinter.isBluetoothSupported());
     
-    // Load stored printer on component mount
-    const stored = getStoredPrinter();
+    // Load stored printer
+    const stored = thermalPrinter.getStoredPrinter();
     setStoredPrinter(stored);
 
-    // Attempt auto-reconnect if possible
-    let pollingInterval: NodeJS.Timeout | null = null;
-    const tryAutoConnect = async () => {
-      if (stored && 'bluetooth' in navigator && (navigator.bluetooth as any).getDevices && !externalIsConnected) {
-        try {
-          const devices: BluetoothDevice[] = await (navigator.bluetooth as any).getDevices();
-          const match = devices.find((d) => d.id === stored.id);
-          if (match && !match.gatt?.connected) {
-            console.log('Attempting auto-reconnect to:', stored.name);
-            const srv = await match.gatt?.connect();
-            if (srv) {
-              setDevice(match);
-              externalOnConnectionChange(true);
-              onPrinterChange(match);
-              toast({ title: 'Auto-connected to printer', description: stored.name });
-              match.addEventListener('gattserverdisconnected', () => {
-                externalOnConnectionChange(false);
-                setDevice(null);
-                onPrinterChange(null);
-                toast({ title: 'Disconnected', variant: 'destructive' });
-              });
-            }
-          }
-        } catch (err: any) {
-          // Silent fail, fallback to next poll
-          console.log('Auto-reconnect failed, will retry later:', err.message);
-        }
-      }
-    };
-
-    if (stored && 'bluetooth' in navigator && (navigator.bluetooth as any).getDevices) {
-      tryAutoConnect(); // initial attempt
-      pollingInterval = setInterval(tryAutoConnect, 15000); // poll every 15s
-    }
-
-    return () => {
-      if (pollingInterval) clearInterval(pollingInterval);
-    };
-  }, []);
-
-  const center = (txt: string, w: number) => {
-    const pad = Math.max(0, Math.floor((w - txt.length) / 2));
-    return ' '.repeat(pad) + txt;
-  };
-
-  const generateReceipt = (asciiOnly = false) => {
-    const WIDTH = 35;
-    const divider = '-'.repeat(WIDTH);
-    const sub = isDirectBilling ? parseFloat(directAmount) || 0 : total;
-    const tax = sub * (shopDetails?.tax_rate || 0);
-    const grand = sub + tax;
-
-    let txt = `\n${center(shopDetails?.name || 'POS SYSTEM', WIDTH)}\n`;
-    if (shopDetails?.address) txt += center(shopDetails.address, WIDTH) + '\n';
-    if (shopDetails?.phone) txt += center(shopDetails.phone, WIDTH) + '\n';
-    txt += `\nDate : ${new Date().toLocaleString()}\n`;
-    txt += `Bill#: ${Date.now()}\n`;
-    txt += `Cashier: Staff\n\n`;
-
-    txt += `Item             QTY   Price    Total\n${divider}\n`;
-    cart.forEach((i) => {
-      const name = i.name.padEnd(16).slice(0, 16);
-      const qty = String(i.quantity).padStart(3);
-      const price = i.price.toFixed(2).padStart(7);
-      const tot = (i.price * i.quantity).toFixed(2).padStart(7);
-      txt += `${name}${qty} ${price} ${tot}\n`;
+    // Set up connection listeners
+    const unsubscribeConnection = thermalPrinter.onConnectionChange((connected) => {
+      externalOnConnectionChange(connected);
     });
 
-    txt += `${divider}\n`;
-    txt += `Subtotal : ₹${sub.toFixed(2).padStart(10)}\n`;
-    txt += `Tax ${((shopDetails?.tax_rate || 0) * 100)
-      .toFixed(1)
-      .padStart(3)}% : ₹${tax.toFixed(2).padStart(8)}\n`;
-    txt += `${divider}\n`;
-    txt += `TOTAL    : ₹${grand.toFixed(2).padStart(10)}\n\n`;
-    txt += `${center('Thank you for your business!', WIDTH)}\n`;
-    txt += `${center('Visit us again soon.', WIDTH)}\n`;
+    const unsubscribeDevice = thermalPrinter.onDeviceChange((device) => {
+      onPrinterChange(device);
+    });
 
-    return asciiOnly ? sanitizeForPrinter(txt) : txt;
-  };
+    // Start auto-reconnection
+    const stopAutoReconnect = thermalPrinter.startAutoReconnect(15000);
 
-  const sendDataInChunks = async (
-    ch: BluetoothRemoteGATTCharacteristic,
-    data: Uint8Array,
-    chunk = 20
-  ) => {
-    for (let i = 0; i < data.length; i += chunk) {
-      await ch.writeValue(data.slice(i, i + chunk));
-      // Small delay between chunks for thermal printer reliability
-      await new Promise(resolve => setTimeout(resolve, 50));
-    }
-  };
-
-  const forceEnglish = async (ch: BluetoothRemoteGATTCharacteristic) => {
-    const enc = new TextEncoder();
-    await ch.writeValue(enc.encode('\x1B@\x1BM\x01')); // init + Font B
-  };
-
-  const resetFont = async (ch: BluetoothRemoteGATTCharacteristic) => {
-    const enc = new TextEncoder();
-    await ch.writeValue(enc.encode('\x1BM\x00')); // Font A
-  };
-
-  const printReceipt = async () => {
-    if (!device || !externalIsConnected) {
-      return toast({ title: 'Not Connected', variant: 'destructive' });
-    }
-    try {
-      const ascii = generateReceipt(true);
-      console.log('Receipt to print:', ascii);
-
-      // Ensure we have a fresh connection
-      const server = device.gatt?.connected ? device.gatt : await device.gatt?.connect();
-      if (!server) throw new Error('GATT connection failed');
-
-      // Find the correct service and characteristic for thermal printers
-      const services = await server.getPrimaryServices();
-      let writeChar: BluetoothRemoteGATTCharacteristic | null = null;
-      
-      // Common thermal printer service UUIDs
-      const thermalPrinterServices = [
-        '000018f0-0000-1000-8000-00805f9b34fb', // Common thermal printer service
-        '00001101-0000-1000-8000-00805f9b34fb', // Serial port profile
-        '0000fee7-0000-1000-8000-00805f9b34fb', // Another common service
-      ];
-
-      // First try to find a known thermal printer service
-      for (const serviceUuid of thermalPrinterServices) {
-        try {
-          const service = await server.getPrimaryService(serviceUuid);
-          const chars = await service.getCharacteristics();
-          writeChar = chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) || null;
-          if (writeChar) {
-            console.log('Found thermal printer service:', serviceUuid);
-            break;
-          }
-        } catch (e) {
-          // Service not found, continue to next
-          continue;
-        }
-      }
-
-      // If no specific service found, try all services
-      if (!writeChar) {
-        for (const svc of services) {
-          const chars = await svc.getCharacteristics();
-          writeChar = chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) || null;
-          if (writeChar) break;
-        }
-      }
-
-      if (!writeChar) throw new Error('No writable characteristic found');
-
-      // Initialize thermal printer with specific commands
-      const initCommands = new Uint8Array([
-        0x1B, 0x40, // ESC @ - Initialize printer
-        0x1B, 0x21, 0x00, // ESC ! - Normal character mode
-        0x1B, 0x61, 0x00, // ESC a - Left align
-        0x1D, 0x21, 0x00, // GS ! - Normal size
-      ]);
-      await writeChar.writeValue(initCommands);
-
-      // Wait a bit for printer to initialize
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Convert receipt to thermal printer format
-      const payload = ascii.replace(/\n/g, '\r\n') + '\r\n\r\n\r\n';
-      const bytes = new TextEncoder().encode(payload);
-      
-      // Send data in chunks for better reliability
-      await sendDataInChunks(writeChar, bytes, 20); // Smaller chunks for thermal printers
-
-      // Wait for printing to complete
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Send cut command for thermal printers
-      const cutCommands = new Uint8Array([
-        0x1D, 0x56, 0x41, 0x0A, // GS V A - Full cut
-      ]);
-      await writeChar.writeValue(cutCommands);
-
-      toast({ title: 'Printed Successfully', description: 'Receipt sent to thermal printer ✅' });
-    } catch (e: any) {
-      console.error('Print error:', e);
-      toast({
-        title: 'Print Failed',
-        description: `Printing error: ${e.message}. Make sure the thermal printer is connected and has paper.`,
-        variant: 'destructive',
-      });
-    }
-  };
+    return () => {
+      unsubscribeConnection();
+      unsubscribeDevice();
+      stopAutoReconnect();
+    };
+  }, [externalOnConnectionChange, onPrinterChange]);
 
   const connectToStoredPrinter = async () => {
     if (!storedPrinter || !bluetoothSupported) return;
     
     setIsConnecting(true);
     try {
-      const svcUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '00001101-0000-1000-8000-00805f9b34fb',
-      ];
-      
-      // First try to get the device from previously allowed devices
-      if ((navigator.bluetooth as any).getDevices) {
-        try {
-          const devices: BluetoothDevice[] = await (navigator.bluetooth as any).getDevices();
-          const match = devices.find((d) => d.id === storedPrinter.id);
-          if (match) {
-            const srv = await match.gatt?.connect();
-            if (srv) {
-              setDevice(match);
-              externalOnConnectionChange(true);
-              onPrinterChange(match);
-              toast({ 
-                title: 'Reconnected', 
-                description: `Connected to ${storedPrinter.name}` 
-              });
-              
-              match.addEventListener('gattserverdisconnected', () => {
-                externalOnConnectionChange(false);
-                setDevice(null);
-                onPrinterChange(null);
-                toast({ title: 'Disconnected', variant: 'destructive' });
-              });
-              return;
-            }
-          }
-        } catch (err) {
-          console.log('Device not found in allowed devices, trying manual connection');
-        }
-      }
-      
-      // Fallback to manual device selection
-      toast({
-        title: 'Select Printer', 
-        description: `Please select ${storedPrinter.name} from the device list` 
-      });
-      
-      const dev = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: svcUUIDs,
-      });
-      
-      // Check if this is the stored device
-      if (dev.id === storedPrinter.id) {
-        const srv = await dev.gatt?.connect();
-        if (srv) {
-          setDevice(dev);
-          externalOnConnectionChange(true);
-          onPrinterChange(dev);
-          
-          // Update stored printer with fresh data
-          storePrinter(dev);
-          setStoredPrinter({
-            id: dev.id,
-            name: dev.name || storedPrinter.name,
-            timestamp: Date.now()
-          });
-    
-    toast({
-            title: 'Reconnected', 
-            description: `Connected to ${dev.name || storedPrinter.name}` 
-          });
-          
-          dev.addEventListener('gattserverdisconnected', () => {
-            externalOnConnectionChange(false);
-            setDevice(null);
-            onPrinterChange(null);
-            toast({ title: 'Disconnected', variant: 'destructive' });
-          });
-        }
-      } else {
-        toast({
-          title: 'Device Mismatch',
-          description: 'Selected device is not the previously connected printer',
-          variant: 'destructive',
+      const device = await thermalPrinter.connectToStored();
+      if (device) {
+        toast({ 
+          title: 'Reconnected', 
+          description: `Connected to ${device.name || storedPrinter.name}` 
         });
       }
     } catch (err: any) {
@@ -386,36 +130,12 @@ export const BluetoothPrinter = ({
     }
     setIsConnecting(true);
     try {
-      const svcUUIDs = [
-        '000018f0-0000-1000-8000-00805f9b34fb',
-        '00001101-0000-1000-8000-00805f9b34fb',
-      ];
-      const dev = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: svcUUIDs,
-      });
-      const srv = await dev.gatt?.connect();
-      if (srv) {
-        setDevice(dev);
-        externalOnConnectionChange(true);
-        onPrinterChange(dev);
-        
-        // Store the connected printer
-        storePrinter(dev);
-        setStoredPrinter({
-          id: dev.id,
-          name: dev.name || 'Unknown Printer',
-          timestamp: Date.now()
-        });
-        
-        toast({ title: 'Bluetooth Connected', description: dev.name || '' });
-        dev.addEventListener('gattserverdisconnected', () => {
-          externalOnConnectionChange(false);
-          setDevice(null);
-          onPrinterChange(null);
-          toast({ title: 'Disconnected', variant: 'destructive' });
-        });
-      }
+      const device = await thermalPrinter.connect();
+      toast({ title: 'Bluetooth Connected', description: device.name || '' });
+      
+      // Update stored printer state
+      const stored = thermalPrinter.getStoredPrinter();
+      setStoredPrinter(stored);
     } catch (err: any) {
       console.error(err);
       toast({
@@ -431,38 +151,57 @@ export const BluetoothPrinter = ({
   };
 
   const disconnect = async () => {
-    if (device?.gatt?.connected) await device.gatt.disconnect();
-    externalOnConnectionChange(false);
-    setDevice(null);
-    onPrinterChange(null);
+    await thermalPrinter.disconnect();
     toast({ title: 'Disconnected' });
   };
 
-  const clearStoredPrinterData = () => {
-    clearStoredPrinter();
-    setStoredPrinter(null);
-    toast({ title: 'Stored Printer Cleared' });
+  const printReceipt = async () => {
+    if (!externalIsConnected) {
+      return toast({ title: 'Not Connected', variant: 'destructive' });
+    }
+    
+    try {
+      await printerManager.printReceipt({
+        cart,
+        total,
+        shopDetails,
+        directAmount: isDirectBilling ? parseFloat(directAmount) || 0 : undefined,
+        toast,
+      });
+    } catch (error) {
+      // Error handling is done inside PrinterManager
+      console.error('Print error:', error);
+    }
   };
 
   const shareReceipt = async () => {
-    const txt = generateReceipt();
+    const receipt = generateReceiptText();
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'Receipt', text: txt });
-        toast({ title: 'Shared' });
-      } catch {
-        navigator.clipboard.writeText(txt);
-        toast({ title: 'Copied' });
+        await navigator.share({
+          title: 'Receipt from ' + (shopDetails?.name || 'POS'),
+          text: receipt,
+        });
+        toast({ title: 'Receipt Shared' });
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          toast({ title: 'Share Failed', variant: 'destructive' });
+        }
       }
     } else {
-      navigator.clipboard.writeText(txt);
-      toast({ title: 'Copied' });
+      // Fallback to copy to clipboard
+      try {
+        await navigator.clipboard.writeText(receipt);
+        toast({ title: 'Receipt Copied to Clipboard' });
+      } catch (err) {
+        toast({ title: 'Copy Failed', variant: 'destructive' });
+      }
     }
   };
 
   const downloadReceipt = () => {
-    const txt = generateReceipt();
-    const blob = new Blob([txt], { type: 'text/plain' });
+    const receipt = generateReceiptText();
+    const blob = new Blob([receipt], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -471,22 +210,64 @@ export const BluetoothPrinter = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast({ title: 'Downloaded' });
+    toast({ title: 'Receipt Downloaded' });
   };
 
-  const handleCompleteOrder = async () => {
-    try {
-      const amt = isDirectBilling ? parseFloat(directAmount) : undefined;
-      await onOrderComplete(paymentMethod, amt);
-      toast({ title: 'Order Completed' });
-      setDirectAmount('');
-      setIsDirectBilling(false);
-      if (externalIsConnected) await printReceipt();
-    } catch {
-      toast({ title: 'Order Failed', variant: 'destructive' });
+  const generateReceiptText = () => {
+    const WIDTH = 35;
+    const divider = '-'.repeat(WIDTH);
+    const sub = isDirectBilling ? parseFloat(directAmount) || 0 : total;
+    const tax = sub * (shopDetails?.tax_rate || 0);
+    const grand = sub + tax;
+
+    let txt = `\n${center(shopDetails?.name || 'POS SYSTEM', WIDTH)}\n`;
+    if (shopDetails?.address) txt += center(shopDetails.address, WIDTH) + '\n';
+    if (shopDetails?.phone) txt += center(shopDetails.phone, WIDTH) + '\n';
+    txt += `\nDate : ${new Date().toLocaleString()}\n`;
+    txt += `Bill#: ${Date.now()}\n`;
+    txt += `Cashier: Staff\n\n`;
+
+    txt += `Item             QTY   Price    Total\n${divider}\n`;
+    cart.forEach((i) => {
+      const name = i.name.padEnd(16).slice(0, 16);
+      const qty = String(i.quantity).padStart(3);
+      const price = i.price.toFixed(2).padStart(7);
+      const tot = (i.price * i.quantity).toFixed(2).padStart(7);
+      txt += `${name}${qty} ${price} ${tot}\n`;
+    });
+
+    txt += `${divider}\n`;
+    txt += `Subtotal : ₹${sub.toFixed(2).padStart(10)}\n`;
+    txt += `Tax ${((shopDetails?.tax_rate || 0) * 100)
+      .toFixed(1)
+      .padStart(3)}% : ₹${tax.toFixed(2).padStart(8)}\n`;
+    txt += `${divider}\n`;
+    txt += `TOTAL    : ₹${grand.toFixed(2).padStart(10)}\n\n`;
+    txt += `${center('Thank you for your business!', WIDTH)}\n`;
+    txt += `${center('Visit us again soon.', WIDTH)}\n`;
+
+    return txt;
+  };
+
+  const center = (txt: string, w: number) => {
+    const pad = Math.max(0, Math.floor((w - txt.length) / 2));
+    return ' '.repeat(pad) + txt;
+  };
+
+  const clearStoredPrinterData = () => {
+    thermalPrinter.clearStoredPrinter();
+    setStoredPrinter(null);
+    toast({ title: 'Stored Printer Cleared' });
+  };
+
+  const handleOrderComplete = async () => {
+    if (externalIsConnected) {
+      await printReceipt();
     }
+    onOrderComplete();
   };
 
+  // iOS-specific UI
   if (isIOS) {
     return (
       <Card className="m-2 mt-1 h-full flex flex-col">
@@ -507,16 +288,38 @@ export const BluetoothPrinter = ({
             <Button onClick={shareReceipt} className="h-8 text-xs">Share Receipt</Button>
             <Button onClick={downloadReceipt} className="h-8 text-xs">Download Receipt</Button>
           </div>
-          <div className="border-t pt-3 space-y-2 flex-1 flex flex-col min-h-0">
-            <div className="flex items-center space-x-2 flex-shrink-0">
+          
+          {/* Payment Section */}
+          <div className="flex-1 flex flex-col space-y-3">
+            <div className="flex items-center space-x-2">
+              <CreditCard className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Payment Method</span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              {(['cash', 'card', 'upi', 'bank_transfer'] as const).map((method) => (
+                <Button
+                  key={method}
+                  variant={paymentMethod === method ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setPaymentMethod(method)}
+                  className="h-8 text-xs"
+                >
+                  {method.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+
+            <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
+                id="direct-billing"
                 checked={isDirectBilling}
                 onChange={(e) => setIsDirectBilling(e.target.checked)}
-                id="directBillingIOS"
+                className="h-4 w-4 text-blue-600"
               />
-              <label htmlFor="directBillingIOS" className="text-xs">
-                Direct billing
+              <label htmlFor="direct-billing" className="text-sm text-gray-700">
+                Direct Billing
               </label>
             </div>
 
@@ -525,31 +328,25 @@ export const BluetoothPrinter = ({
                 type="number"
                 value={directAmount}
                 onChange={(e) => setDirectAmount(e.target.value)}
-                placeholder="Custom amount"
-                className="w-full p-2 border rounded text-xs flex-shrink-0"
+                placeholder="Enter amount"
+                className="w-full p-2 border border-gray-300 rounded text-sm"
                 step="0.01"
               />
             )}
 
-            <div className="flex-1 flex items-end">
-              <Button 
-                onClick={handleCompleteOrder} 
-                className="w-full h-12 md:h-14 text-base md:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
-                disabled={
-                  (!cart.length && !isDirectBilling) ||
-                  (isDirectBilling && !directAmount)
-                }
-              >
-                <CreditCard className="h-5 w-5 md:h-6 md:w-6 mr-2" /> 
-                {cart.length > 0 ? `Complete Order - ₹${(total + (total * (shopDetails?.tax_rate || 0))).toFixed(2)}` : 'Complete Order'}
-              </Button>
-            </div>
+            <Button 
+              onClick={handleOrderComplete}
+              className="w-full h-10 bg-green-600 hover:bg-green-700 text-white font-medium"
+            >
+              Complete Order
+            </Button>
           </div>
         </CardContent>
       </Card>
     );
   }
 
+  // Bluetooth not supported UI
   if (!bluetoothSupported) {
     return (
       <Card className="m-2 mt-1 h-full flex flex-col">
@@ -570,16 +367,38 @@ export const BluetoothPrinter = ({
             <Button onClick={shareReceipt} className="h-8 text-xs">Share Receipt</Button>
             <Button onClick={downloadReceipt} className="h-8 text-xs">Download Receipt</Button>
           </div>
-          <div className="border-t pt-3 space-y-2 flex-1 flex flex-col min-h-0">
-            <div className="flex items-center space-x-2 flex-shrink-0">
+          
+          {/* Payment Section */}
+          <div className="flex-1 flex flex-col space-y-3">
+            <div className="flex items-center space-x-2">
+              <CreditCard className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">Payment Method</span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              {(['cash', 'card', 'upi', 'bank_transfer'] as const).map((method) => (
+                <Button
+                  key={method}
+                  variant={paymentMethod === method ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setPaymentMethod(method)}
+                  className="h-8 text-xs"
+                >
+                  {method.toUpperCase()}
+                </Button>
+              ))}
+            </div>
+
+            <div className="flex items-center space-x-2">
               <input
                 type="checkbox"
+                id="direct-billing-2"
                 checked={isDirectBilling}
                 onChange={(e) => setIsDirectBilling(e.target.checked)}
-                id="directBillingNoBT"
+                className="h-4 w-4 text-blue-600"
               />
-              <label htmlFor="directBillingNoBT" className="text-xs">
-                Direct billing
+              <label htmlFor="direct-billing-2" className="text-sm text-gray-700">
+                Direct Billing
               </label>
             </div>
 
@@ -588,31 +407,25 @@ export const BluetoothPrinter = ({
                 type="number"
                 value={directAmount}
                 onChange={(e) => setDirectAmount(e.target.value)}
-                placeholder="Custom amount"
-                className="w-full p-2 border rounded text-xs flex-shrink-0"
+                placeholder="Enter amount"
+                className="w-full p-2 border border-gray-300 rounded text-sm"
                 step="0.01"
               />
             )}
 
-            <div className="flex-1 flex items-end">
-              <Button 
-                onClick={handleCompleteOrder} 
-                className="w-full h-12 md:h-14 text-base md:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
-                disabled={
-                  (!cart.length && !isDirectBilling) ||
-                  (isDirectBilling && !directAmount)
-                }
-              >
-                <CreditCard className="h-5 w-5 md:h-6 md:w-6 mr-2" /> 
-                {cart.length > 0 ? `Complete Order - ₹${(total + (total * (shopDetails?.tax_rate || 0))).toFixed(2)}` : 'Complete Order'}
-              </Button>
-            </div>
+            <Button 
+              onClick={handleOrderComplete}
+              className="w-full h-10 bg-green-600 hover:bg-green-700 text-white font-medium"
+            >
+              Complete Order
+            </Button>
           </div>
         </CardContent>
       </Card>
     );
   }
 
+  // Main UI
   return (
     <Card className="w-full h-full flex flex-col bg-white border border-gray-200 shadow-sm overflow-hidden">
       <CardHeader className="pb-2 lg:pb-3 flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white">
@@ -628,114 +441,166 @@ export const BluetoothPrinter = ({
           </div>
         </CardTitle>
       </CardHeader>
-      
-      <CardContent className="flex-1 flex flex-col space-y-3 lg:space-y-4 p-3 lg:p-4 overflow-hidden">
-        {/* Payment Section */}
-        <div className="flex-1 flex flex-col min-h-0 bg-gradient-to-br from-green-50 to-blue-50 rounded-lg p-3 lg:p-4 border border-green-200">
-          <div className="flex items-center justify-between mb-3 lg:mb-4">
-            <h3 className="text-base lg:text-lg font-bold text-gray-900 flex items-center">
-              <svg className="w-4 h-4 lg:w-5 lg:h-5 mr-1 lg:mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-              Payment Details
-            </h3>
-            <div className="flex items-center space-x-2">
-              {/* Connection Status Indicator */}
-              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                externalIsConnected 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {externalIsConnected ? '🟢 Connected' : '🔴 Not Connected'}
-              </div>
-              <div className="bg-green-100 text-green-800 px-2 lg:px-3 py-1 lg:py-2 rounded-full text-xs lg:text-sm font-medium">
-                Secure Payment
-              </div>
-            </div>
+
+      <CardContent className="flex-1 flex flex-col p-3 lg:p-4 space-y-3 lg:space-y-4">
+        {/* Connection Status */}
+        <div className="flex items-center justify-between p-2 lg:p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center space-x-2">
+            {externalIsConnected ? (
+              <BluetoothConnected className="h-4 w-4 lg:h-5 lg:w-5 text-green-600" />
+            ) : (
+              <Bluetooth className="h-4 w-4 lg:h-5 lg:w-5 text-gray-400" />
+            )}
+            <span className="text-sm lg:text-base font-medium text-gray-700">
+              {externalIsConnected ? 'Connected' : 'Not Connected'}
+            </span>
+          </div>
+          {externalIsConnected && (
+            <Button
+              onClick={disconnect}
+              variant="outline"
+              size="sm"
+              className="h-6 lg:h-8 text-xs lg:text-sm"
+            >
+              Disconnect
+            </Button>
+          )}
+        </div>
+
+        {/* Connection and Test Print Buttons */}
+        {!externalIsConnected && (
+          <Button 
+            onClick={async () => {
+              if (storedPrinter) {
+                await connectToStoredPrinter();
+              } else {
+                await connectToDevice();
+              }
+            }}
+            disabled={isConnecting}
+            className="w-full h-10 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {isConnecting ? 'Connecting...' : '🔗 Connect Bluetooth Printer'}
+          </Button>
+        )}
+        
+        {/* Test Print Button */}
+        {externalIsConnected && (
+          <Button 
+            onClick={printReceipt}
+            className="w-full h-10 text-sm font-medium bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            🖨️ Test Print Receipt
+          </Button>
+        )}
+
+        {/* Payment Method Selection */}
+        <div className="space-y-2 lg:space-y-3">
+          <div className="flex items-center space-x-2">
+            <CreditCard className="h-4 w-4 text-gray-500" />
+            <span className="text-sm lg:text-base font-medium text-gray-700">Payment Method</span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-2 lg:gap-3">
+            {(['cash', 'card', 'upi', 'bank_transfer'] as const).map((method) => (
+              <Button
+                key={method}
+                variant={paymentMethod === method ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPaymentMethod(method)}
+                className="h-8 lg:h-10 text-xs lg:text-sm"
+              >
+                {method.toUpperCase()}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Direct Billing Option */}
+        <div className="space-y-2 lg:space-y-3">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="direct-billing-main"
+              checked={isDirectBilling}
+              onChange={(e) => setIsDirectBilling(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="direct-billing-main" className="text-sm lg:text-base text-gray-700">
+              Direct Billing
+            </label>
           </div>
 
-          <div className="space-y-3 lg:space-y-4 flex-1 flex flex-col">
-            {/* Payment Method */}
+          {isDirectBilling && (
             <div className="flex-shrink-0">
-              <label className="block text-sm lg:text-base font-medium text-gray-700 mb-1 lg:mb-2">Payment Method</label>
-              <select 
-                value={paymentMethod} 
-                onChange={(e) => setPaymentMethod(e.target.value as any)}
-                className="w-full p-2 lg:p-3 border border-gray-300 rounded-lg text-sm lg:text-base focus:border-green-500 focus:ring-green-500 bg-white"
-              >
-                <option value="cash">💵 Cash</option>
-                <option value="card">💳 Card</option>
-                <option value="upi">📱 UPI</option>
-                <option value="bank_transfer">🏦 Bank Transfer</option>
-                <option value="other">📋 Other</option>
-              </select>
-            </div>
-
-            {/* Direct Billing Option */}
-            <div className="flex items-center space-x-2 lg:space-x-3 flex-shrink-0">
+              <label className="block text-sm lg:text-base font-medium text-gray-700 mb-1 lg:mb-2">Custom Amount</label>
               <input
-                type="checkbox"
-                checked={isDirectBilling}
-                onChange={(e) => setIsDirectBilling(e.target.checked)}
-                id="directBilling"
-                className="w-4 h-4 lg:w-5 lg:h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                type="number"
+                value={directAmount}
+                onChange={(e) => setDirectAmount(e.target.value)}
+                placeholder="Enter amount"
+                className="w-full p-2 lg:p-3 border border-gray-300 rounded-lg text-sm lg:text-base focus:border-green-500 focus:ring-green-500"
+                step="0.01"
               />
-              <label htmlFor="directBilling" className="text-sm lg:text-base font-medium text-gray-700">
-                Direct billing (custom amount)
-              </label>
             </div>
+          )}
+        </div>
 
-            {/* Custom Amount Input */}
-            {isDirectBilling && (
-              <div className="flex-shrink-0">
-                <label className="block text-sm lg:text-base font-medium text-gray-700 mb-1 lg:mb-2">Custom Amount</label>
-                <input
-                  type="number"
-                  value={directAmount}
-                  onChange={(e) => setDirectAmount(e.target.value)}
-                  placeholder="Enter amount"
-                  className="w-full p-2 lg:p-3 border border-gray-300 rounded-lg text-sm lg:text-base focus:border-green-500 focus:ring-green-500"
-                  step="0.01"
-                />
-              </div>
-            )}
-
-            {/* Complete Order Button - Enhanced and Always Visible */}
-            <div className="flex-1 flex items-end pt-2 lg:pt-3">
-              <div className="w-full space-y-2">
-                {/* Connection Button */}
-                {!externalIsConnected && (
-                  <Button 
-                    onClick={async () => {
-                      if (storedPrinter) {
-                        await connectToStoredPrinter();
-                      } else {
-                        await connectToDevice();
-                      }
-                    }}
-                    disabled={isConnecting}
-                    className="w-full h-10 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {isConnecting ? 'Connecting...' : '🔗 Connect Bluetooth Printer'}
-                  </Button>
-                )}
-                
-                {/* Complete Order Button */}
-                <Button 
-                  onClick={handleCompleteOrder} 
-                  className="w-full h-12 lg:h-14 text-base lg:text-lg font-bold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 border-0"
-                  disabled={
-                    (!cart.length && !isDirectBilling) ||
-                    (isDirectBilling && !directAmount)
-                  }
-                >
-                  <CreditCard className="h-5 w-5 lg:h-6 lg:w-6 mr-2 lg:mr-3" /> 
-                  {cart.length > 0 ? `Complete Order - ₹${(total + (total * (shopDetails?.tax_rate || 0))).toFixed(2)}` : 'Complete Order'}
-                </Button>
-              </div>
+        {/* Complete Order Button - Enhanced and Always Visible */}
+        <div className="flex-1 flex items-end pt-2 lg:pt-3">
+          <div className="w-full space-y-2">
+            <Button 
+              onClick={handleOrderComplete}
+              className="w-full h-12 lg:h-14 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold text-base lg:text-lg rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+            >
+              💳 Complete Order & Print Receipt
+            </Button>
+            
+            {/* Alternative Actions */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button 
+                onClick={shareReceipt}
+                variant="outline"
+                size="sm"
+                className="h-8 lg:h-10 text-xs lg:text-sm"
+              >
+                <Share className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
+                Share
+              </Button>
+              <Button 
+                onClick={downloadReceipt}
+                variant="outline"
+                size="sm"
+                className="h-8 lg:h-10 text-xs lg:text-sm"
+              >
+                <Download className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
+                Download
+              </Button>
             </div>
           </div>
         </div>
+
+        {/* Stored Printer Management */}
+        {storedPrinter && (
+          <div className="pt-2 lg:pt-3 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <History className="h-3 w-3 lg:h-4 lg:w-4 text-gray-400" />
+                <span className="text-xs lg:text-sm text-gray-600">
+                  Stored: {storedPrinter.name}
+                </span>
+              </div>
+              <Button
+                onClick={clearStoredPrinterData}
+                variant="ghost"
+                size="sm"
+                className="h-6 lg:h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

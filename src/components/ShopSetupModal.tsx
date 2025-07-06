@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ interface ShopSetupModalProps {
 }
 
 const ShopSetupModal = ({ isOpen, onClose, onShopCreated }: ShopSetupModalProps) => {
+  const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -84,6 +86,9 @@ const ShopSetupModal = ({ isOpen, onClose, onShopCreated }: ShopSetupModalProps)
       await refreshProfile();
       onShopCreated();
       onClose();
+      
+      // Redirect to shop-setup page
+      navigate('/shop-setup');
       
       // Reset form
       setCurrentStep(1);

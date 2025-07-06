@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { CartItem, ShopDetails } from '@/types/pos';
 import { Package } from 'lucide-react';
 import { useState } from 'react';
+import { SingleClickPayment } from './pos/SingleClickPayment';
 
 interface CartProps {
   items: CartItem[];
@@ -15,9 +16,15 @@ interface CartProps {
   shopDetails: ShopDetails;
   compact?: boolean;
   onProceedToCheckout?: () => void;
+  singleClickMode?: boolean;
+  onCompleteOrder?: (
+    method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
+    directAmount?: number
+  ) => Promise<void>;
+  printerConnected?: boolean;
 }
 
-export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails, compact = false, onProceedToCheckout }: CartProps) => {
+export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails, compact = false, onProceedToCheckout, singleClickMode = false, onCompleteOrder, printerConnected = false }: CartProps) => {
   const tax = total * shopDetails.tax_rate;
   const finalTotal = total + tax;
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);
@@ -68,7 +75,9 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
                   ? `${item.id}_${item.selectedVariant.id}`
                   : item.id;
                 return (
-                <div key={itemId} className="bg-white border border-gray-200 rounded-lg p-2 lg:p-2.5 hover:shadow-md transition-shadow duration-200 flex items-start gap-2">
+                <div key={itemId} className={`bg-white border border-gray-200 rounded-lg p-2 lg:p-2.5 hover:shadow-md transition-all duration-200 flex items-start gap-2 ${
+                  singleClickMode ? 'cursor-pointer hover:scale-105' : ''
+                }`} onClick={singleClickMode ? () => onUpdateQuantity(itemId, item.quantity + 1) : undefined}>
                   {/* Product Image/Icon */}
                   <div className="flex-shrink-0 w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg flex items-center justify-center">
                     {item.image ? (
@@ -90,7 +99,8 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           onRemoveItem(itemId);
                         }}
                         className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 ml-1"
@@ -124,33 +134,60 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
                       </div>
                       {/* Quantity Controls */}
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            onUpdateQuantity(itemId, item.quantity - 1);
-                          }}
-                          className="h-5 w-5 p-0 border-gray-300 hover:border-blue-500 hover:bg-blue-50"
-                          aria-label="Decrease"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <div className="w-6 text-center">
-                          <span className="text-xs lg:text-sm font-bold text-gray-900">
-                            {item.quantity}
-                          </span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            onUpdateQuantity(itemId, item.quantity + 1);
-                          }}
-                          className="h-5 w-5 p-0 border-gray-300 hover:border-blue-500 hover:bg-blue-50"
-                          aria-label="Increase"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
+                        {singleClickMode ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onUpdateQuantity(itemId, item.quantity - 1);
+                              }}
+                              className="h-5 w-5 p-0 border-gray-300 hover:border-red-500 hover:bg-red-50"
+                              aria-label="Decrease"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <div className="w-8 text-center bg-green-50 border border-green-200 rounded px-1">
+                              <span className="text-xs lg:text-sm font-bold text-green-700">
+                                {item.quantity}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500 ml-1">
+                              Click to add
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                onUpdateQuantity(itemId, item.quantity - 1);
+                              }}
+                              className="h-5 w-5 p-0 border-gray-300 hover:border-blue-500 hover:bg-blue-50"
+                              aria-label="Decrease"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <div className="w-6 text-center">
+                              <span className="text-xs lg:text-sm font-bold text-gray-900">
+                                {item.quantity}
+                              </span>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                onUpdateQuantity(itemId, item.quantity + 1);
+                              }}
+                              className="h-5 w-5 p-0 border-gray-300 hover:border-blue-500 hover:bg-blue-50"
+                              aria-label="Increase"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                     {/* Total for this item */}
@@ -167,41 +204,55 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
             </div>
             {/* Order Summary & Payment (always at bottom, never moves) */}
             <div className="flex-shrink-0 pt-1 pb-1 bg-white">
-              {/* Compact Order Summary for Desktop */}
-              <div className="hidden lg:block">
-                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-1">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span className="font-semibold text-base">₹{finalTotal.toFixed(2)}</span>
-                    <span className="text-xs bg-green-100 text-green-700 rounded px-2 ml-2">{items.length} {items.length === 1 ? 'item' : 'items'}</span>
+              {/* Single Click Payment Mode */}
+              {singleClickMode && onCompleteOrder ? (
+                <div className="p-3">
+                  <SingleClickPayment
+                    cart={items}
+                    total={total}
+                    shopDetails={shopDetails}
+                    onCompleteOrder={onCompleteOrder}
+                    printerConnected={printerConnected}
+                    onRemoveItem={onRemoveItem}
+                  />
+                </div>
+              ) : (
+                /* Compact Order Summary for Desktop */
+                <div className="hidden lg:block">
+                  <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg px-3 py-2 mb-1">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="font-semibold text-base">₹{finalTotal.toFixed(2)}</span>
+                      <span className="text-xs bg-green-100 text-green-700 rounded px-2 ml-2">{items.length} {items.length === 1 ? 'item' : 'items'}</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" onClick={onClearCart} className="text-red-600 border-red-200 px-2 py-1 h-7">Clear</Button>
+                      <Button variant="outline" size="sm" className="px-2 py-1 h-7">Hold</Button>
+                      {onProceedToCheckout && (
+                        <Button 
+                          size="sm" 
+                          onClick={onProceedToCheckout}
+                          className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-7"
+                        >
+                          Checkout
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button variant="outline" size="sm" onClick={onClearCart} className="text-red-600 border-red-200 px-2 py-1 h-7">Clear</Button>
-                    <Button variant="outline" size="sm" className="px-2 py-1 h-7">Hold</Button>
-                    {onProceedToCheckout && (
-                      <Button 
-                        size="sm" 
-                        onClick={onProceedToCheckout}
-                        className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 h-7"
-                      >
-                        Checkout
-                      </Button>
-                    )}
+                  <div className="flex justify-between text-xs px-1 mb-1">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium">₹{total.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs px-1 mb-1">
+                    <span className="text-gray-600">Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%)</span>
+                    <span className="font-medium">₹{tax.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm px-1 font-bold border-t pt-1 mt-1">
+                    <span>Total</span>
+                    <span className="text-green-700">₹{finalTotal.toFixed(2)}</span>
                   </div>
                 </div>
-                <div className="flex justify-between text-xs px-1 mb-1">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">₹{total.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs px-1 mb-1">
-                  <span className="text-gray-600">Tax ({(shopDetails.tax_rate * 100).toFixed(1)}%)</span>
-                  <span className="font-medium">₹{tax.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm px-1 font-bold border-t pt-1 mt-1">
-                  <span>Total</span>
-                  <span className="text-green-700">₹{finalTotal.toFixed(2)}</span>
-                </div>
-              </div>
+              )}
               {/* Compact Order Summary for Mobile/Tablet (unchanged) */}
               <div className="block lg:hidden">
                 <div

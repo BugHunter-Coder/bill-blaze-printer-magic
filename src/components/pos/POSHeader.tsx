@@ -8,7 +8,8 @@ import {
   Printer, 
   Store,
   Bluetooth,
-  BluetoothConnected
+  BluetoothConnected,
+  CreditCard
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -21,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { storePrinter, getStoredPrinter, clearStoredPrinter, StoredPrinter } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { thermalPrinter } from '@/lib/ThermalPrinter';
 
 interface POSHeaderProps {
   shopName: string;
@@ -44,6 +46,7 @@ export function POSHeader({
   const [isConnecting, setIsConnecting] = useState(false);
   const [storedPrinter, setStoredPrinter] = useState<StoredPrinter | null>(null);
   const [bluetoothSupported, setBluetoothSupported] = useState(false);
+  const [testPrintLoading, setTestPrintLoading] = useState(false);
 
   useEffect(() => {
     // Check Bluetooth support
@@ -270,6 +273,32 @@ export function POSHeader({
     }
   };
 
+  const handleTestPrint = async () => {
+    setTestPrintLoading(true);
+    try {
+      await thermalPrinter.printReceipt({
+        cart: [
+          { name: 'Test Item', quantity: 1, price: 10.0 }
+        ],
+        total: 10.0,
+        shopDetails: {
+          name: 'Test Shop',
+          address: '123 Test St',
+          phone: '+1-555-TEST',
+          tax_rate: 0.05
+        }
+      }, {
+        showToast: true,
+        autoCut: true,
+        paperWidth: 35
+      });
+    } catch (err) {
+      // Error will be shown via toast/logs
+    } finally {
+      setTestPrintLoading(false);
+    }
+  };
+
   return (
     <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -328,6 +357,9 @@ export function POSHeader({
                   Clear Stored Printer
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={handleTestPrint} disabled={testPrintLoading || !printerConnected}>
+                🖨️ {testPrintLoading ? 'Printing...' : 'Test Print'}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -345,6 +377,10 @@ export function POSHeader({
             <DropdownMenuItem onClick={() => navigate('/dashboard')}>
               <Settings className="h-4 w-4 mr-2" />
               Dashboard
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/subscription')}>
+              <CreditCard className="h-4 w-4 mr-2" />
+              Subscription
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive">

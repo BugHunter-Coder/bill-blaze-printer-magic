@@ -16,7 +16,7 @@ import {
   Bluetooth,
   BluetoothConnected
 } from 'lucide-react';
-import { printReceiptToBluetoothPrinter } from '@/lib/utils';
+import { thermalPrinter } from '@/lib/ThermalPrinter';
 import { useMediaQuery } from 'react-responsive';
 import React from 'react';
 
@@ -35,6 +35,7 @@ interface PaymentCheckoutModalProps {
   printerDevice: BluetoothDevice | null;
   toast: (args: { title: string; description?: string; variant?: string }) => void;
   onRemoveItem: (itemId: string) => void;
+  singleClickMode?: boolean;
 }
 
 export function PaymentCheckoutModal({
@@ -48,7 +49,8 @@ export function PaymentCheckoutModal({
   onPrinterChange,
   printerDevice,
   toast,
-  onRemoveItem
+  onRemoveItem,
+  singleClickMode = false
 }: PaymentCheckoutModalProps) {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi' | 'bank_transfer' | 'other'>('cash');
   const [directAmount, setDirectAmount] = useState('');
@@ -69,19 +71,29 @@ export function PaymentCheckoutModal({
     try {
       await onCompleteOrder(paymentMethod, isDirectBilling ? parseFloat(directAmount) : undefined);
       // Print after payment if printer is connected and device is available
+      console.log('[POS] printerConnected:', printerConnected, 'printerDevice:', printerDevice);
       if (printerConnected && printerDevice) {
         try {
-          await printReceiptToBluetoothPrinter({
-            device: printerDevice,
+          await thermalPrinter.printReceipt({
             cart,
             total,
             shopDetails,
             directAmount: isDirectBilling ? parseFloat(directAmount) : undefined,
-            toast,
+          }, {
+            showToast: true,
+            autoCut: true,
+            paperWidth: 35,
           });
         } catch (e) {
           // Already handled by toast in utility
         }
+      } else {
+        toast({
+          title: 'Print Skipped',
+          description: 'No printer connected or device not available. Please connect your Bluetooth printer.',
+          variant: 'destructive',
+        });
+        console.warn('[POS] Print skipped: printerConnected:', printerConnected, 'printerDevice:', printerDevice);
       }
     } finally {
       setIsProcessing(false);

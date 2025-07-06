@@ -54,6 +54,7 @@ import {
   Battery,
   Signal
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -222,6 +223,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       ]
     },
     {
+      title: 'Subscription',
+      path: '/subscription',
+      icon: CreditCard,
+      badge: 'New',
+      description: 'Upgrade your plan and features',
+      isActive: isActiveRoute('/subscription')
+    },
+    {
       title: 'Shop Management',
       path: '/shop',
       icon: Store,
@@ -302,6 +311,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       description: 'Application settings and preferences'
     }
   ];
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
 
   const renderNavItem = (item: NavItem, level: number = 0) => {
     const isExpanded = expandedItems.includes(item.title);
@@ -461,7 +475,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                 <Settings className="h-3 w-3 mr-1" />
                 Settings
               </Button>
-              <Button variant="outline" size="sm" className="text-xs">
+              <Button variant="outline" size="sm" className="text-xs" onClick={handleLogout}>
                 <LogOut className="h-3 w-3 mr-1" />
                 Logout
               </Button>
@@ -478,10 +492,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
           </div>
         ) : (
           <div className="flex flex-col items-center space-y-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <User className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>

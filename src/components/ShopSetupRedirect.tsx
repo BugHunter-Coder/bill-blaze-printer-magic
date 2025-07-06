@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/hooks/useShop';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ interface ShopSetupRedirectProps {
 }
 
 export const ShopSetupRedirect = ({ children }: ShopSetupRedirectProps) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile, loading: authLoading } = useAuth();
   const { shops, loading: shopsLoading, refreshShops } = useShop();
   const [showSetup, setShowSetup] = useState(false);
@@ -19,19 +22,25 @@ export const ShopSetupRedirect = ({ children }: ShopSetupRedirectProps) => {
   useEffect(() => {
     // Only check after both auth and shops have loaded
     if (!authLoading && !shopsLoading && user && profile) {
-      // If user has no shops, show setup screen
+      // If user has no shops at all, show setup screen
       if (shops.length === 0) {
         setShowSetup(true);
       } else {
+        // If user has shops and is on /shop-setup, redirect to /dashboard
+        if (location.pathname === '/shop-setup') {
+          navigate('/dashboard');
+          return;
+        }
         setShowSetup(false);
       }
     }
-  }, [authLoading, shopsLoading, user, profile, shops.length]);
+  }, [authLoading, shopsLoading, user, profile, shops.length, location.pathname, navigate]);
 
   const handleShopCreated = async () => {
     // Refresh shops after creation
     await refreshShops();
     setShowSetup(false);
+    // Navigation to /shop-setup is handled in ShopSetupModal
   };
 
   // Show loading while checking
