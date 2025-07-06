@@ -21,6 +21,9 @@ CREATE INDEX IF NOT EXISTS idx_product_variants_active ON product_variants(is_ac
 -- Add RLS policies for product_variants
 ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
 
+-- Drop the policy if it exists to avoid errors
+DROP POLICY IF EXISTS "Shop owners can manage their product variants" ON product_variants;
+
 -- Policy for shop owners to manage their product variants
 CREATE POLICY "Shop owners can manage their product variants" ON product_variants
   FOR ALL USING (
@@ -33,6 +36,9 @@ CREATE POLICY "Shop owners can manage their product variants" ON product_variant
       )
     )
   );
+
+-- Drop the policy if it exists to avoid errors
+DROP POLICY IF EXISTS "Shop users can view product variants" ON product_variants;
 
 -- Policy for shop users to view product variants
 CREATE POLICY "Shop users can view product variants" ON product_variants
@@ -64,6 +70,9 @@ CREATE INDEX IF NOT EXISTS idx_variant_options_shop_id ON variant_options(shop_i
 -- Add RLS policies for variant_options
 ALTER TABLE variant_options ENABLE ROW LEVEL SECURITY;
 
+-- Drop the policy if it exists to avoid errors
+DROP POLICY IF EXISTS "Shop owners can manage their variant options" ON variant_options;
+
 -- Policy for shop owners to manage their variant options
 CREATE POLICY "Shop owners can manage their variant options" ON variant_options
   FOR ALL USING (
@@ -73,6 +82,9 @@ CREATE POLICY "Shop owners can manage their variant options" ON variant_options
       SELECT id FROM shops WHERE owner_id = auth.uid()
     )
   );
+
+-- Drop the policy if it exists to avoid errors
+DROP POLICY IF EXISTS "Shop users can view variant options" ON variant_options;
 
 -- Policy for shop users to view variant options
 CREATE POLICY "Shop users can view variant options" ON variant_options
@@ -101,6 +113,7 @@ CREATE TRIGGER update_product_variants_updated_at
   BEFORE UPDATE ON product_variants 
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_variant_options_updated_at ON variant_options;
 CREATE TRIGGER update_variant_options_updated_at 
   BEFORE UPDATE ON variant_options 
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column(); 

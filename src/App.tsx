@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ShopProvider } from "@/hooks/useShop";
 import { Layout } from "@/components/Layout";
 import { ShopSetupRedirect } from "@/components/ShopSetupRedirect";
+import ShopAccessGuard from "@/components/ShopAccessGuard";
 import Landing from "./pages/Landing";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -16,7 +17,32 @@ import AddProduct from "./pages/AddProduct";
 import NotFound from "./pages/NotFound";
 import ShopManagementPage from "./pages/ShopManagementPage";
 import Analytics from "./pages/Analytics";
+import ShopDeactivated from "./pages/ShopDeactivated";
+import Subscription from "./pages/Subscription";
+import ShopSetup from "./pages/ShopSetup";
 import { CategoryManagement } from "@/components/CategoryManagement";
+import AdminLayout from "@/components/AdminLayout";
+import { ProfileDebug } from "@/components/debug/ProfileDebug";
+import InventoryPage from './pages/inventory';
+
+// Admin page imports
+import ShopManagement from "./pages/admin/ShopManagement";
+import ShopAnalytics from "./pages/admin/ShopAnalytics";
+import ShopApprovals from "./pages/admin/ShopApprovals";
+import UserRoles from "./pages/admin/UserRoles";
+import UserActivity from "./pages/admin/UserActivity";
+import BillingManagement from "./pages/admin/BillingManagement";
+import SubscriptionPlans from "./pages/admin/SubscriptionPlans";
+import SystemOverview from "./pages/admin/SystemOverview";
+import GeneralSettings from "./pages/admin/GeneralSettings";
+import SystemHealth from "./pages/admin/SystemHealth";
+import SystemPerformance from "./pages/admin/SystemPerformance";
+import SupportCenter from "./pages/admin/SupportCenter";
+
+// Transaction page imports
+import TransactionHistoryPage from './pages/transactions/history';
+import TransactionRefundsPage from './pages/transactions/refunds';
+import TransactionPaymentsPage from './pages/transactions/payments';
 
 const queryClient = new QueryClient();
 
@@ -31,160 +57,548 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/shop-deactivated" element={<ShopDeactivated />} />
+              <Route 
+                path="/shop-setup" 
+                element={
+                  <ShopAccessGuard>
+                    <Layout>
+                      <ShopSetup />
+                    </Layout>
+                  </ShopAccessGuard>
+                } 
+              />
+              <Route path="/debug" element={<ProfileDebug />} />
               <Route 
                 path="/dashboard" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <Index />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <Index />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/admin" 
                 element={
-                  <Layout>
+                  <AdminLayout>
                     <Admin />
-                  </Layout>
+                  </AdminLayout>
+                } 
+              />
+              {/* Admin Shop Management Routes */}
+              <Route 
+                path="/admin/shops" 
+                element={
+                  <AdminLayout>
+                    <ShopManagement />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/shops/analytics" 
+                element={
+                  <AdminLayout>
+                    <ShopAnalytics />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/shops/approvals" 
+                element={
+                  <AdminLayout>
+                    <ShopApprovals />
+                  </AdminLayout>
+                } 
+              />
+              
+              {/* Admin User Management Routes */}
+              <Route 
+                path="/admin/users" 
+                element={
+                  <AdminLayout>
+                    <UserActivity />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/users/roles" 
+                element={
+                  <AdminLayout>
+                    <UserRoles />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/users/activity" 
+                element={
+                  <AdminLayout>
+                    <UserActivity />
+                  </AdminLayout>
+                } 
+              />
+              
+              {/* Admin Analytics Routes */}
+              <Route 
+                path="/admin/analytics" 
+                element={
+                  <AdminLayout>
+                    <ShopAnalytics />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/analytics/shops" 
+                element={
+                  <AdminLayout>
+                    <ShopAnalytics />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/analytics/users" 
+                element={
+                  <AdminLayout>
+                    <ShopAnalytics />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/analytics/revenue" 
+                element={
+                  <AdminLayout>
+                    <ShopAnalytics />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/analytics/overview" 
+                element={
+                  <AdminLayout>
+                    <SystemOverview />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/analytics/users" 
+                element={
+                  <AdminLayout>
+                    <UserActivity />
+                  </AdminLayout>
+                } 
+              />
+              
+              {/* Admin Management Routes */}
+              <Route 
+                path="/admin/management/approvals" 
+                element={
+                  <AdminLayout>
+                    <ShopApprovals />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/management/roles" 
+                element={
+                  <AdminLayout>
+                    <UserRoles />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/management/activity" 
+                element={
+                  <AdminLayout>
+                    <UserActivity />
+                  </AdminLayout>
+                } 
+              />
+              
+              {/* Admin Billing Routes */}
+              <Route 
+                path="/admin/billing" 
+                element={
+                  <AdminLayout>
+                    <BillingManagement />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/billing/management" 
+                element={
+                  <AdminLayout>
+                    <BillingManagement />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/billing/plans" 
+                element={
+                  <AdminLayout>
+                    <SubscriptionPlans />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/subscriptions" 
+                element={
+                  <AdminLayout>
+                    <SubscriptionPlans />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/subscriptions/billing" 
+                element={
+                  <AdminLayout>
+                    <BillingManagement />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/subscriptions/plans" 
+                element={
+                  <AdminLayout>
+                    <SubscriptionPlans />
+                  </AdminLayout>
+                } 
+              />
+              
+              {/* Admin Monitoring Routes */}
+              <Route 
+                path="/admin/monitoring" 
+                element={
+                  <AdminLayout>
+                    <SystemOverview />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/monitoring/overview" 
+                element={
+                  <AdminLayout>
+                    <SystemOverview />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/monitoring/health" 
+                element={
+                  <AdminLayout>
+                    <SystemHealth />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/monitoring/performance" 
+                element={
+                  <AdminLayout>
+                    <SystemPerformance />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/monitoring/logs" 
+                element={
+                  <AdminLayout>
+                    <SystemHealth />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/status" 
+                element={
+                  <AdminLayout>
+                    <SystemOverview />
+                  </AdminLayout>
+                } 
+              />
+              
+              {/* Admin Settings Routes */}
+              <Route 
+                path="/admin/settings" 
+                element={
+                  <AdminLayout>
+                    <GeneralSettings />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/settings/general" 
+                element={
+                  <AdminLayout>
+                    <GeneralSettings />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/settings/ai" 
+                element={
+                  <AdminLayout>
+                    <GeneralSettings />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/settings/security" 
+                element={
+                  <AdminLayout>
+                    <GeneralSettings />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/settings/integrations" 
+                element={
+                  <AdminLayout>
+                    <GeneralSettings />
+                  </AdminLayout>
+                } 
+              />
+              
+              {/* Admin Support Routes */}
+              <Route 
+                path="/admin/support" 
+                element={
+                  <AdminLayout>
+                    <SupportCenter />
+                  </AdminLayout>
+                } 
+              />
+              <Route 
+                path="/admin/support/center" 
+                element={
+                  <AdminLayout>
+                    <SupportCenter />
+                  </AdminLayout>
                 } 
               />
               <Route 
                 path="/pos" 
                 element={
-                  <ShopSetupRedirect>
-                    <POS />
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <POS />
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/products/add" 
                 element={
-                  <ShopSetupRedirect>
-                    <AddProduct />
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <AddProduct />
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/products/categories" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <CategoryManagement />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <CategoryManagement />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/products/catalog" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <CategoryManagement />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <CategoryManagement />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/shop" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <ShopManagementPage />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <ShopManagementPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/shop/settings" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <ShopManagementPage />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <ShopManagementPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/shop/staff" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <ShopManagementPage />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <ShopManagementPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/shop/printer" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <ShopManagementPage />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <ShopManagementPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/shop/integrations" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <ShopManagementPage />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <ShopManagementPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/analytics" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <Analytics />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <Analytics />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/analytics/sales" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <Analytics />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <Analytics />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/analytics/customers" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <Analytics />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <Analytics />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/analytics/products" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <Analytics />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <Analytics />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
+                } 
+              />
+              <Route 
+                path="/subscription" 
+                element={
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Subscription />
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
               <Route 
                 path="/analytics/financial" 
                 element={
-                  <ShopSetupRedirect>
-                    <Layout>
-                      <Analytics />
-                    </Layout>
-                  </ShopSetupRedirect>
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <Analytics />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
                 } 
               />
+              <Route 
+                path="/products/inventory" 
+                element={
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <InventoryPage />
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
+                } 
+              />
+              
+              {/* Transaction Routes */}
+              <Route 
+                path="/transactions/history" 
+                element={
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <TransactionHistoryPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
+                } 
+              />
+              <Route 
+                path="/transactions/refunds" 
+                element={
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <TransactionRefundsPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
+                } 
+              />
+              <Route 
+                path="/transactions/payments" 
+                element={
+                  <ShopAccessGuard>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <TransactionPaymentsPage />
+                      </Layout>
+                    </ShopSetupRedirect>
+                  </ShopAccessGuard>
+                } 
+              />
+              
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

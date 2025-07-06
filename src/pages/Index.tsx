@@ -55,12 +55,15 @@ import {
   Cloud,
   Wifi,
   Battery,
-  Signal
+  Signal,
+  Menu
 } from 'lucide-react';
 import { SalesReport } from '@/components/SalesReport';
 import { ProductManagement } from '@/components/ProductManagement';
+import { SubscriptionApplication } from '@/components/SubscriptionApplication';
+import { MobileSubscriptionCard } from '@/components/MobileSubscriptionCard';
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, Legend, BarChart, LineChart as RechartsLineChart, Area, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
-import { Sidebar, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface DashboardStats {
   todayOrders: number;
@@ -96,7 +99,7 @@ interface PerformanceMetric {
 
 const Index = () => {
   const { user, profile, loading } = useAuth();
-  const { selectedShop } = useShop();
+  const { selectedShop, refreshShops } = useShop();
   const [stats, setStats] = useState<DashboardStats>({
     todayOrders: 0,
     todaySales: 0,
@@ -126,6 +129,9 @@ const Index = () => {
   const [hourlyData, setHourlyData] = useState<{ hour: string; sales: number }[]>([]);
   const [categoryData, setCategoryData] = useState<{ name: string; value: number; color: string }[]>([]);
   const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetric[]>([]);
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Check if user should be redirected to admin panel - ONLY for system admins
   useEffect(() => {
@@ -365,18 +371,28 @@ const Index = () => {
   }
 
   return (
-    <SidebarProvider>
+    <div className="space-y-6">
+      <div className="flex justify-end mb-2">
+        <Button variant="outline" size="sm" onClick={refreshShops}>
+          Refresh Shops
+        </Button>
+      </div>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex">
-        {/* Sidebar: responsive */}
-        <Sidebar>
-          {/* Sidebar content is handled by the Sidebar component itself */}
-        </Sidebar>
         {/* Main content area */}
         <div className="flex-1 flex flex-col min-h-screen">
           {/* Header */}
           <div className="bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <SidebarTrigger />
+              {isMobile && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="lg:hidden"
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
+              )}
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
@@ -699,6 +715,13 @@ const Index = () => {
               ))}
             </div>
 
+            {/* Mobile Subscription Card - Only show on mobile */}
+            {isMobile && (
+              <div className="mb-6">
+                <MobileSubscriptionCard />
+              </div>
+            )}
+
             {/* Quick Actions & Alerts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Quick Actions */}
@@ -797,7 +820,7 @@ const Index = () => {
 
             {/* Detailed Analytics Tabs */}
             <Tabs defaultValue="sales" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+              <TabsList className="grid w-full grid-cols-2 xs:grid-cols-3 sm:grid-cols-5 bg-gray-100 p-1 rounded-xl overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                 <TabsTrigger 
                   value="sales" 
                   className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-lg transition-all"
@@ -815,6 +838,12 @@ const Index = () => {
                   className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-lg transition-all"
                 >
                   Customer Insights
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="subscription" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-lg transition-all"
+                >
+                  Subscription
                 </TabsTrigger>
                 <TabsTrigger 
                   value="reports" 
@@ -864,6 +893,17 @@ const Index = () => {
                 </Card>
               </TabsContent>
 
+              <TabsContent value="subscription" className="space-y-2 sm:space-y-4 mt-4 sm:mt-6">
+                <Card className="border-0 shadow-md">
+                  <CardHeader>
+                    <CardTitle>Subscription Management</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <SubscriptionApplication />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="reports" className="space-y-2 sm:space-y-4 mt-4 sm:mt-6">
                 <Card className="border-0 shadow-md">
                   <CardHeader>
@@ -885,7 +925,7 @@ const Index = () => {
           </div>
         </div>
       </div>
-    </SidebarProvider>
+    </div>
   );
 };
 

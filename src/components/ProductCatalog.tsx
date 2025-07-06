@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Plus, Search, Package, Settings, Filter } from 'lucide-react';
 import { DatabaseProduct, Product, ProductVariant } from '@/types/pos';
 import { useNavigate } from 'react-router-dom';
+import { VariantChipSelector } from './pos/VariantChipSelector';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Category {
   id: string;
@@ -27,9 +29,10 @@ interface Category {
 interface ProductCatalogProps {
   onAddToCart: (product: Product) => void;
   onAddProduct?: () => void;
+  singleClickMode?: boolean;
 }
 
-export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProps) => {
+export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: ProductCatalogProps) => {
   const { profile } = useAuth();
   const { selectedShopId } = useShop();
   const navigate = useNavigate();
@@ -42,6 +45,8 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
   const [selectedProduct, setSelectedProduct] = useState<DatabaseProduct | null>(null);
   const [productVariants, setProductVariants] = useState<ProductVariant[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [expandedVariantProduct, setExpandedVariantProduct] = useState<string | null>(null);
+  const [selectedVariantForProduct, setSelectedVariantForProduct] = useState<Record<string, ProductVariant>>({});
 
   useEffect(() => {
     if (selectedShopId) {
@@ -49,6 +54,21 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
       fetchCategories();
     }
   }, [selectedShopId]);
+
+  // Load variants for products with variants
+  useEffect(() => {
+    const loadVariantsForProducts = async () => {
+      if (singleClickMode && products.length > 0) {
+        for (const product of products) {
+          if (product.has_variants) {
+            await fetchProductVariants(product.id);
+          }
+        }
+      }
+    };
+    
+    loadVariantsForProducts();
+  }, [products, singleClickMode]);
 
   const fetchProducts = async () => {
     if (!selectedShopId) return;
@@ -75,6 +95,21 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
       
       console.log('Fetched products:', data?.length, 'products for shop:', selectedShopId);
       setProducts(data || []);
+      
+      // Set default variants for products with variants
+      if (singleClickMode && data) {
+        const defaultVariants: Record<string, ProductVariant> = {};
+        for (const product of data) {
+          if (product.has_variants) {
+            const variants = await fetchProductVariants(product.id);
+            const firstAvailableVariant = variants.find(variant => variant.stock_quantity > 0);
+            if (firstAvailableVariant) {
+              defaultVariants[product.id] = firstAvailableVariant;
+            }
+          }
+        }
+        setSelectedVariantForProduct(defaultVariants);
+      }
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -110,9 +145,12 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
         .order('name');
       
       if (error) throw error;
-      setProductVariants(data || []);
+      const variants = data || [];
+      setProductVariants(variants);
+      return variants;
     } catch (error) {
       console.error('Error fetching product variants:', error);
+      return [];
     }
   };
 
@@ -157,16 +195,43 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
     return product;
   };
 
-  const getOptionPrice = (variant: ProductVariant) => {
-    return selectedProduct ? selectedProduct.price + variant.price_modifier : variant.price_modifier;
+  const getOptionPrice = (variant: ProductVariant, basePrice?: number) => {
+    const price = basePrice || (selectedProduct ? selectedProduct.price : 0);
+    return price + variant.price_modifier;
   };
 
-  const handleAddToCart = (product: DatabaseProduct) => {
+  const handleAddToCart = async (product: DatabaseProduct) => {
     console.log('ProductCatalog handleAddToCart called with:', product); // Debug log
     if (product.has_variants) {
-      setSelectedProduct(product);
-      fetchProductVariants(product.id);
-      setShowVariantModal(true);
+      if (singleClickMode) {
+        // In single-click mode, check if user has selected a variant
+        const selectedVariant = selectedVariantForProduct[product.id];
+        if (selectedVariant) {
+          // User has selected a variant, add that one
+          const convertedProduct = convertToProduct(product, selectedVariant);
+          console.log('Adding selected variant to cart:', convertedProduct); // Debug log
+          onAddToCart(convertedProduct);
+        } else {
+          // No variant selected, automatically add the first available variant
+          const variants = await fetchProductVariants(product.id);
+          const firstAvailableVariant = variants.find(variant => variant.stock_quantity > 0);
+          if (firstAvailableVariant) {
+            const convertedProduct = convertToProduct(product, firstAvailableVariant);
+            console.log('Adding first available variant to cart:', convertedProduct); // Debug log
+            onAddToCart(convertedProduct);
+          } else {
+            // If no variants available, add base product
+            const convertedProduct = convertToProduct(product);
+            console.log('Adding base product to cart (no variants available):', convertedProduct); // Debug log
+            onAddToCart(convertedProduct);
+          }
+        }
+      } else {
+        // Traditional modal approach
+        setSelectedProduct(product);
+        fetchProductVariants(product.id);
+        setShowVariantModal(true);
+      }
     } else {
       const convertedProduct = convertToProduct(product);
       console.log('Adding non-variant product to cart:', convertedProduct); // Debug log
@@ -293,89 +358,117 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
                     {categoryProducts.length} products
                   </Badge>
                 </div>
-                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4"
-                     style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-5">
                   {categoryProducts.map((product) => (
-                    <Card 
-                      key={product.id} 
-                      className="group overflow-hidden hover:shadow-lg focus-within:shadow-lg transition-all duration-300 cursor-pointer border-gray-200 hover:border-blue-400 focus-within:border-blue-500 bg-white rounded-xl min-w-[220px] max-w-full"
-                      tabIndex={0}
-                    >
-                      <CardContent className="p-3 md:p-4 lg:p-5 flex flex-col h-full">
-                        {/* Product Image */}
-                        <div className="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg mb-3 md:mb-4 flex items-center justify-center relative overflow-hidden w-full">
-                          {product.image_url ? (
-                            <img
-                              src={product.image_url}
-                              alt={product.name}
-                              className="w-full h-full object-cover rounded-lg group-hover:scale-105 group-focus:scale-105 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="flex flex-col items-center justify-center text-gray-400">
-                              <Package className="h-8 w-8 md:h-10 md:w-10 lg:h-12 lg:w-12 mb-2" />
-                              <span className="text-base md:text-lg">No Image</span>
+                    <div key={product.id}>
+                      <Card className="group rounded-xl shadow-md border border-gray-200 bg-white hover:shadow-lg transition min-w-[180px] max-w-[240px] flex flex-col h-full">
+                        <CardContent className="p-4 flex flex-col h-full">
+                          {/* Product Image & Badges */}
+                          <div className="relative mb-3">
+                            <div className="aspect-square w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                              {product.image_url ? (
+                                <img
+                                  src={product.image_url}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover rounded-lg"
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center justify-center text-gray-400">
+                                  <Package className="h-10 w-10 mb-1" />
+                                  <span className="text-xs">No Image</span>
+                                </div>
+                              )}
                             </div>
-                          )}
-                          {/* Stock Status Badge */}
-                          {product.stock_quantity <= product.min_stock_level && (
-                            <div className="absolute top-2 right-2 md:top-3 md:right-3 bg-red-500 text-white text-xs px-2 py-1 md:px-2.5 md:py-1.5 rounded-full font-medium shadow">
-                              Low
-                            </div>
-                          )}
-                          {/* Variant Indicator */}
-                          {product.has_variants && (
-                            <div className="absolute top-2 left-2 md:top-3 md:left-3 bg-blue-500 text-white text-xs px-2 py-1 md:px-2.5 md:py-1.5 rounded-full font-medium shadow">
-                              <Settings className="h-4 w-4 inline mr-1" />
-                              <span className="hidden sm:inline">Var</span>
-                            </div>
-                          )}
-                        </div>
-                        {/* Product Info */}
-                        <div className="flex flex-col flex-1 space-y-3 md:space-y-4">
-                          <div className="flex items-start justify-between">
-                            <h3 className="font-semibold text-gray-900 truncate flex-1 text-base md:text-lg leading-tight">
-                              {product.name}
-                            </h3>
+                            {/* Badges */}
+                            {product.stock_quantity <= product.min_stock_level && (
+                              <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow">
+                                Low
+                              </div>
+                            )}
+                            {product.has_variants && (
+                              <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow flex items-center gap-1">
+                                <Settings className="h-4 w-4" />
+                                <span>Var</span>
+                              </div>
+                            )}
                           </div>
-                          {product.description && (
-                            <p className="text-sm md:text-base text-gray-600 line-clamp-2 leading-relaxed">
-                              {product.description}
-                            </p>
-                          )}
-                          {/* Price and Stock */}
-                          <div className="flex items-center justify-between mt-auto">
-                            <div className="flex flex-col">
-                              <p className="text-base md:text-lg lg:text-xl font-bold text-gray-900">
-                                ₹{product.price.toFixed(2)}
-                              </p>
-                              <p className="text-sm md:text-base text-gray-500">
-                                Stock: {product.has_variants ? '—' : product.stock_quantity}
-                              </p>
-                            </div>
+                          {/* Product Info */}
+                          <div className="flex-1 flex flex-col gap-1">
+                            <h3 className="font-semibold text-base text-gray-900 truncate" title={product.name}>{product.name}</h3>
+                            {product.description && (
+                              <p className="text-xs text-gray-500 line-clamp-2">{product.description}</p>
+                            )}
+                            {/* Variant Chips */}
+                            {product.has_variants && (
+                              <div className="mt-1 overflow-x-auto pb-1">
+                                <VariantChipSelector
+                                  productId={product.id}
+                                  variants={productVariants}
+                                  selectedVariant={selectedVariantForProduct[product.id] || null}
+                                  onVariantSelect={(variant) => {
+                                    setSelectedVariantForProduct(prev => ({
+                                      ...prev,
+                                      [product.id]: variant
+                                    }));
+                                  }}
+                                  basePrice={product.price}
+                                  showPrice={true}
+                                  compact={true}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          {/* Price & Stock Row */}
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-lg font-bold text-green-700">
+                              {product.has_variants && !selectedVariantForProduct[product.id] ? (
+                                <Skeleton className="h-5 w-14" />
+                              ) : product.has_variants && selectedVariantForProduct[product.id] 
+                                ? `₹${getOptionPrice(selectedVariantForProduct[product.id], product.price).toFixed(2)}`
+                                : `₹${product.price.toFixed(2)}`
+                              }
+                            </span>
                             <Badge 
                               variant={product.has_variants ? "default" : (product.stock_quantity > 0 ? "default" : "destructive")}
-                              className="text-sm md:text-base px-3 py-1.5 md:px-4 md:py-2 font-medium"
+                              className="text-xs px-2 py-1 font-medium ml-2"
                             >
                               {product.has_variants ? 'In Stock' : (product.stock_quantity > 0 ? 'In Stock' : 'Out')}
                             </Badge>
                           </div>
                           {/* Add to Cart Button */}
-                          <Button
-                            onClick={() => handleAddToCart(product)}
-                            className="w-full h-12 md:h-14 lg:h-16 text-base md:text-lg font-semibold bg-blue-600 hover:bg-blue-700 focus:bg-blue-800 text-white transition-all duration-200 group-hover:bg-blue-700 group-focus:bg-blue-800 rounded-lg mt-2"
-                            size="lg"
-                            disabled={product.has_variants ? false : product.stock_quantity === 0}
-                            tabIndex={0}
-                          >
-                            <svg className="w-5 h-5 md:w-6 md:h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
-                            </svg>
-                            <span className="hidden sm:inline">Add to Cart</span>
-                            <span className="sm:hidden">Add</span>
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                          <div className="mt-3">
+                            {singleClickMode ? (
+                              <button
+                                className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center transition"
+                                onClick={() => handleAddToCart(product).catch(console.error)}
+                                disabled={product.has_variants ? !selectedVariantForProduct[product.id] : product.stock_quantity === 0}
+                              >
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
+                                </svg>
+                                {product.has_variants && selectedVariantForProduct[product.id] 
+                                  ? `Add ${selectedVariantForProduct[product.id].value}`
+                                  : 'Add to Cart'
+                                }
+                              </button>
+                            ) : (
+                              <Button
+                                onClick={() => handleAddToCart(product).catch(console.error)}
+                                className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center mt-1"
+                                size="sm"
+                                disabled={product.has_variants ? false : product.stock_quantity === 0}
+                                tabIndex={0}
+                              >
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
+                                </svg>
+                                Add to Cart
+                              </Button>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -423,7 +516,7 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
                             className="flex items-center gap-2"
                           >
                             <span>{variant.value}</span>
-                            <span className="text-xs font-medium">₹{getOptionPrice(variant).toFixed(2)}</span>
+                            <span className="text-xs font-medium">₹{getOptionPrice(variant, selectedProduct?.price || 0).toFixed(2)}</span>
                             {variant.stock_quantity === 0 && (
                               <span className="text-xs text-red-500">(Out of Stock)</span>
                             )}
@@ -445,7 +538,7 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
                   </div>
                   <div className="flex justify-between font-semibold border-t pt-1 mt-1">
                     <span>Price:</span>
-                    <span>₹{getOptionPrice(selectedVariant).toFixed(2)}</span>
+                    <span>₹{getOptionPrice(selectedVariant, selectedProduct?.price || 0).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-xs text-gray-600 mt-1">
                     <span>Available:</span>
@@ -461,7 +554,7 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct }: ProductCatalogProp
                 disabled={!selectedVariant || selectedVariant.stock_quantity === 0}
                 className="w-full"
               >
-                Add to Cart - ₹{selectedVariant ? getOptionPrice(selectedVariant).toFixed(2) : '0.00'}
+                Add to Cart - ₹{selectedVariant ? getOptionPrice(selectedVariant, selectedProduct?.price || 0).toFixed(2) : '0.00'}
               </Button>
             </div>
           </div>

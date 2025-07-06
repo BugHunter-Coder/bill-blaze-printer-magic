@@ -116,10 +116,6 @@ export function useCart(shop: Shop | null) {
 
       return [...prev, { ...product, quantity: 1 }];
     });
-
-    toast({
-      description: `${product.name} added to cart`,
-    });
   };
 
   const updateQuantity = (id: string, quantity: number) => {

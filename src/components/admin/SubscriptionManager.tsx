@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -183,142 +182,151 @@ export const SubscriptionManager = ({ shops }: SubscriptionManagerProps) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Loading subscriptions...</span>
+      <div className="flex items-center justify-center py-8 sm:py-12">
+        <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-sm sm:text-base">Loading subscriptions...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <CreditCard className="h-5 w-5 mr-2 text-green-600" />
+          <CardTitle className="flex items-center text-lg sm:text-xl">
+            <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-green-600" />
             Subscription Management
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              As a super admin, you can manage all shop subscriptions, grant access, and control billing features.
-            </AlertDescription>
-          </Alert>
-
-          {/* Grant New Subscription */}
-          <div className="mb-6 p-4 border rounded-lg">
-            <h3 className="font-medium mb-4">Grant New Subscription</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <Label>Select Shop</Label>
-                <Select onValueChange={setSelectedShop} value={selectedShop}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose shop" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {shops.map((shop) => (
-                      <SelectItem key={shop.id} value={shop.id}>
-                        {shop.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Subscription Tier</Label>
-                <Select onValueChange={(value: 'basic' | 'premium' | 'enterprise') => setNewSubscriptionTier(value)} value={newSubscriptionTier}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="basic">Basic</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
-                    <SelectItem value="enterprise">Enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Duration (Days)</Label>
-                <Input
-                  type="number"
-                  value={subscriptionDuration}
-                  onChange={(e) => setSubscriptionDuration(Number(e.target.value))}
-                  min="1"
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  onClick={() => selectedShop && updateSubscription(selectedShop, 'active', newSubscriptionTier, subscriptionDuration)}
-                  disabled={!selectedShop}
-                  className="w-full"
-                >
-                  Grant Subscription
-                </Button>
-              </div>
+        <CardContent className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="shop-select" className="text-sm">Select Shop</Label>
+              <Select value={selectedShop} onValueChange={setSelectedShop}>
+                <SelectTrigger id="shop-select" className="text-sm">
+                  <SelectValue placeholder="Choose a shop" />
+                </SelectTrigger>
+                <SelectContent>
+                  {shops.map((shop) => (
+                    <SelectItem key={shop.id} value={shop.id} className="text-sm">
+                      {shop.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          </div>
 
-          {/* Subscription List */}
-          <div className="space-y-4">
-            <h3 className="font-medium">Current Subscriptions</h3>
-            {subscriptions.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {subscriptions.map((sub) => (
-                  <Card key={sub.shopId} className="hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-lg">{sub.shopName}</CardTitle>
-                        <Badge variant={sub.subscriptionStatus === 'active' ? "default" : "secondary"}>
-                          {sub.subscriptionStatus}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="text-sm text-gray-600">
-                        <p><strong>Owner:</strong> {sub.ownerEmail}</p>
-                        <p><strong>Tier:</strong> {sub.subscriptionTier}</p>
-                        {sub.subscriptionEnd && (
-                          <p><strong>Expires:</strong> {new Date(sub.subscriptionEnd).toLocaleDateString()}</p>
-                        )}
-                      </div>
-                      
-                      <div className="flex space-x-2 pt-2">
-                        {sub.subscriptionStatus === 'active' ? (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => revokeSubscription(sub.shopId)}
-                          >
-                            Revoke
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateSubscription(sub.shopId, 'active', 'basic', 30)}
-                          >
-                            Activate
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <DollarSign className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No subscriptions found</h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  Grant subscriptions to shops to enable premium features.
-                </p>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="tier-select" className="text-sm">Subscription Tier</Label>
+              <Select value={newSubscriptionTier} onValueChange={(value: 'basic' | 'premium' | 'enterprise') => setNewSubscriptionTier(value)}>
+                <SelectTrigger id="tier-select" className="text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="basic" className="text-sm">Basic</SelectItem>
+                  <SelectItem value="premium" className="text-sm">Premium</SelectItem>
+                  <SelectItem value="enterprise" className="text-sm">Enterprise</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="duration-input" className="text-sm">Duration (days)</Label>
+              <Input
+                id="duration-input"
+                type="number"
+                value={subscriptionDuration}
+                onChange={(e) => setSubscriptionDuration(parseInt(e.target.value) || 30)}
+                min="1"
+                max="365"
+                className="text-sm"
+              />
+            </div>
+
+            <div className="flex items-end">
+              <Button 
+                onClick={() => {
+                  if (selectedShop) {
+                    updateSubscription(selectedShop, 'active', newSubscriptionTier, subscriptionDuration);
+                  }
+                }}
+                disabled={!selectedShop}
+                className="w-full sm:w-auto text-sm"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Activate Subscription
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        {subscriptions.map((subscription) => (
+          <Card key={subscription.shopId} className="hover:shadow-md transition-shadow">
+            <CardHeader className="pb-2 sm:pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base sm:text-lg flex items-center">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-blue-600" />
+                  <span className="truncate">{subscription.shopName}</span>
+                </CardTitle>
+                <Badge 
+                  variant={subscription.subscriptionStatus === 'active' ? 'default' : 'secondary'}
+                  className="text-xs"
+                >
+                  {subscription.subscriptionStatus}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2 sm:space-y-3">
+              <div className="text-xs sm:text-sm text-gray-600 space-y-1">
+                <p className="truncate"><strong>Owner:</strong> {subscription.ownerEmail}</p>
+                <p><strong>Tier:</strong> {subscription.subscriptionTier}</p>
+                {subscription.subscriptionEnd && (
+                  <p><strong>Ends:</strong> {new Date(subscription.subscriptionEnd).toLocaleDateString()}</p>
+                )}
+                {subscription.stripeCustomerId && (
+                  <p className="truncate"><strong>Stripe ID:</strong> {subscription.stripeCustomerId}</p>
+                )}
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => updateSubscription(
+                    subscription.shopId, 
+                    subscription.subscriptionStatus === 'active' ? 'inactive' : 'active',
+                    subscription.subscriptionTier,
+                    30
+                  )}
+                  className="flex-1 sm:flex-none text-xs"
+                >
+                  {subscription.subscriptionStatus === 'active' ? 'Deactivate' : 'Activate'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => revokeSubscription(subscription.shopId)}
+                  className="flex-1 sm:flex-none text-xs"
+                >
+                  Revoke
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {subscriptions.length === 0 && (
+        <div className="text-center py-8 sm:py-12">
+          <CreditCard className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm sm:text-base font-medium text-gray-900">No subscriptions found</h3>
+          <p className="mt-1 text-xs sm:text-sm text-gray-500">
+            No subscription data available for the shops.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

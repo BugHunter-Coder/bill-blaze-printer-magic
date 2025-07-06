@@ -12,6 +12,7 @@ interface ShopContextType {
   loading: boolean;
   setSelectedShopId: (shopId: string) => void;
   refreshShops: () => Promise<void>;
+  refreshShopAccess: () => Promise<void>;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
@@ -26,25 +27,38 @@ export const ShopProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchUserShops = async () => {
     try {
       setLoading(true);
-      if (!profile) return;
-
-      let shopsQuery = supabase
-        .from('shops')
-        .select('*')
-        .order('name');
-
-      // If user has a specific shop_id, fetch that shop and any shops they own
-      if (profile.shop_id) {
-        shopsQuery = shopsQuery.or(`id.eq.${profile.shop_id},owner_id.eq.${profile.id}`);
-      } else {
-        // If no shop_id, fetch shops they own
-        shopsQuery = shopsQuery.eq('owner_id', profile.id);
+      if (!profile) {
+        console.log('No profile available, skipping shop fetch');
+        setShops([]);
+        setSelectedShop(null);
+        setSelectedShopId(null);
+        return;
       }
 
-      const { data: userShops, error } = await shopsQuery;
+      console.log('Fetching shops for profile:', profile);
+
+      // Build or filter parts - include shops where user is owner OR where user's profile shop_id matches OR shop is active
+      const orParts = [`owner_id.eq.${profile.id}`];
+      if (profile.shop_id) {
+        orParts.push(`id.eq.${profile.shop_id}`);
+      }
+      orParts.push('is_active.eq.true'); // Always include all active shops
+      const orString = orParts.join(',');
+
+      // Fetch all shops the user has access to or are active
+      const { data: userShops, error } = await supabase
+        .from('shops')
+        .select('*')
+        .or(orString)
+        .order('name');
+
+      console.log('Fetched shops:', userShops, 'Profile shop_id:', profile.shop_id, 'Error:', error);
 
       if (error) {
         console.error('Error fetching shops:', error);
+        setShops([]);
+        setSelectedShop(null);
+        setSelectedShopId(null);
         return;
       }
 
@@ -52,12 +66,25 @@ export const ShopProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Set default selected shop if none is selected
       if (userShops && userShops.length > 0 && !selectedShopId) {
-        const defaultShop = userShops.find(s => s.id === profile.shop_id) || userShops[0];
+        // First try to find shop that matches profile.shop_id
+        let defaultShop = userShops.find(s => s.id === profile.shop_id);
+        // If no match, use the first active shop
+        if (!defaultShop) {
+          defaultShop = userShops.find(s => s.is_active) || userShops[0];
+        }
         setSelectedShopId(defaultShop.id);
         setSelectedShop(defaultShop);
+        console.log('Set default shop:', defaultShop);
+      } else if (!userShops || userShops.length === 0) {
+        setSelectedShopId(null);
+        setSelectedShop(null);
+        console.log('No shops found, cleared selection');
       }
     } catch (err) {
       console.error('Error fetching user shops:', err);
+      setShops([]);
+      setSelectedShop(null);
+      setSelectedShopId(null);
     } finally {
       setLoading(false);
     }
@@ -73,16 +100,23 @@ export const ShopProvider = ({ children }: { children: React.ReactNode }) => {
     await fetchUserShops();
   };
 
+  const refreshShopAccess = async () => {
+    await fetchUserShops();
+    
+    // If we have shops but no selected shop, try to select an active one
+    if (shops.length > 0 && !selectedShop) {
+      const activeShop = shops.find(s => s.is_active);
+      if (activeShop) {
+        setSelectedShopId(activeShop.id);
+        setSelectedShop(activeShop);
+        console.log('Auto-selected active shop:', activeShop);
+      }
+    }
+  };
+
   useEffect(() => {
     fetchUserShops();
   }, [profile]);
-
-  useEffect(() => {
-    if (selectedShopId && shops.length > 0) {
-      const shop = shops.find(s => s.id === selectedShopId);
-      setSelectedShop(shop || null);
-    }
-  }, [selectedShopId, shops]);
 
   const value = {
     shops,
@@ -91,6 +125,7 @@ export const ShopProvider = ({ children }: { children: React.ReactNode }) => {
     loading,
     setSelectedShopId: handleSetSelectedShopId,
     refreshShops,
+    refreshShopAccess,
   };
 
   return <ShopContext.Provider value={value}>{children}</ShopContext.Provider>;

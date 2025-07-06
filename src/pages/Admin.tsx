@@ -131,9 +131,16 @@ const Admin = () => {
       if (error) throw error;
 
       await fetchShops();
+      
+      const newStatus = !currentStatus;
+      const shop = shops.find(s => s.id === shopId);
+      
       toast({
-        title: "Success",
-        description: `Shop ${!currentStatus ? 'activated' : 'deactivated'} successfully.`,
+        title: newStatus ? "Shop Activated" : "Shop Deactivated",
+        description: newStatus 
+          ? `${shop?.name} has been activated. Users can now log in.`
+          : `${shop?.name} has been deactivated. All users associated with this shop will no longer be able to log in.`,
+        variant: newStatus ? "default" : "destructive",
       });
     } catch (error) {
       console.error('Error updating shop status:', error);
@@ -212,27 +219,7 @@ const Admin = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-4">
-          <Settings className="h-8 w-8 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">System Admin Panel</h1>
-          <Badge variant="outline" className="text-green-600">
-            Super Admin
-          </Badge>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-600">Welcome, {profile?.full_name || user.email}</span>
-          <Button onClick={() => navigate('/dashboard')} variant="outline" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Dashboard
-          </Button>
-          <Button onClick={handleLogout} variant="destructive" size="sm">
-            Logout
-          </Button>
-        </div>
-      </div>
-
+    <div className="p-2 sm:p-4 md:p-6">
       <SuperAdminPanel
         shops={shops}
         shopUsers={shopUsers}

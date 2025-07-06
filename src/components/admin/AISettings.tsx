@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -102,27 +101,27 @@ export const AISettings = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center">
-          <Brain className="h-5 w-5 mr-2 text-purple-600" />
+        <CardTitle className="flex items-center text-lg sm:text-xl">
+          <Brain className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-purple-600" />
           AI Assistant Configuration
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4 sm:space-y-6">
         <Alert>
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
+          <AlertDescription className="text-sm">
             Configure OpenAI integration to enable AI-powered inventory suggestions, 
             sales analytics, and product optimization features.
           </AlertDescription>
         </Alert>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
             <div>
-              <Label className="text-base font-medium">OpenAI API Status</Label>
-              <p className="text-sm text-gray-600">Current configuration status</p>
+              <Label className="text-sm sm:text-base font-medium">OpenAI API Status</Label>
+              <p className="text-xs sm:text-sm text-gray-600">Current configuration status</p>
             </div>
-            <Badge variant={isConfigured ? "default" : "secondary"} className="flex items-center">
+            <Badge variant={isConfigured ? "default" : "secondary"} className="flex items-center w-fit text-xs">
               {isConfigured ? (
                 <>
                   <CheckCircle className="h-3 w-3 mr-1" />
@@ -138,20 +137,21 @@ export const AISettings = () => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="openai-key">OpenAI API Key</Label>
-            <div className="flex space-x-2">
+            <Label htmlFor="openai-key" className="text-sm">OpenAI API Key</Label>
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 id="openai-key"
                 type="password"
                 placeholder="sk-..."
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="flex-1"
+                className="flex-1 text-sm"
               />
               <Button 
                 onClick={testConnection} 
                 variant="outline"
                 disabled={testingConnection || !apiKey.trim()}
+                className="w-full sm:w-auto text-sm"
               >
                 <Key className="h-4 w-4 mr-2" />
                 {testingConnection ? 'Testing...' : 'Test'}
@@ -168,15 +168,15 @@ export const AISettings = () => {
           <Button 
             onClick={saveConfiguration}
             disabled={isLoading || !apiKey.trim()}
-            className="w-full"
+            className="w-full text-sm"
           >
             {isLoading ? 'Saving...' : 'Save Configuration'}
           </Button>
         </div>
 
-        <div className="border-t pt-4">
-          <h4 className="font-medium mb-2">AI Features Available:</h4>
-          <ul className="text-sm text-gray-600 space-y-1">
+        <div className="border-t pt-3 sm:pt-4">
+          <h4 className="font-medium mb-2 text-sm sm:text-base">AI Features Available:</h4>
+          <ul className="text-xs sm:text-sm text-gray-600 space-y-1">
             <li>• Smart product suggestions based on your business type</li>
             <li>• Inventory optimization recommendations</li>
             <li>• Sales analytics and growth strategies</li>

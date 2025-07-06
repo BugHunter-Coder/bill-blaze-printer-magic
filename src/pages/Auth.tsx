@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Store, ShoppingCart, BarChart3, Users, Shield, Sparkles, ArrowRight, CheckCircle } from 'lucide-react';
 import { SignInForm } from '@/components/auth/SignInForm';
 import { SignUpForm } from '@/components/auth/SignUpForm';
-import { AdminLoginForm } from '@/components/auth/AdminLoginForm';
 import { Button } from '@/components/ui/button';
 
 const Auth = () => {
@@ -153,7 +152,7 @@ const Auth = () => {
             
             <CardContent className="px-6 pb-6">
               <Tabs defaultValue="signin" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-gray-100 p-1 rounded-xl">
+                <TabsList className="grid w-full grid-cols-2 bg-gray-100 p-1 rounded-xl">
                   <TabsTrigger 
                     value="signin" 
                     className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-lg transition-all"
@@ -165,13 +164,6 @@ const Auth = () => {
                     className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-lg transition-all"
                   >
                     Sign Up
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="admin" 
-                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-600 rounded-lg transition-all"
-                  >
-                    <Shield className="h-4 w-4 mr-1" />
-                    Admin
                   </TabsTrigger>
                 </TabsList>
                 
@@ -187,14 +179,6 @@ const Auth = () => {
                   <TabsContent value="signup" className="space-y-0">
                     <SignUpForm 
                       onSubmit={signUp} 
-                      isLoading={isLoading} 
-                      setIsLoading={setIsLoading} 
-                    />
-                  </TabsContent>
-                  
-                  <TabsContent value="admin" className="space-y-0">
-                    <AdminLoginForm 
-                      onSubmit={signIn} 
                       isLoading={isLoading} 
                       setIsLoading={setIsLoading} 
                     />

@@ -486,6 +486,70 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_applications: {
+        Row: {
+          id: string
+          shop_id: string
+          shop_name: string
+          owner_id: string
+          requested_tier: string
+          application_reason: string | null
+          status: string
+          reviewed_by: string | null
+          review_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          shop_id: string
+          shop_name: string
+          owner_id: string
+          requested_tier: string
+          application_reason?: string | null
+          status?: string
+          reviewed_by?: string | null
+          review_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          shop_id?: string
+          shop_name?: string
+          owner_id?: string
+          requested_tier?: string
+          application_reason?: string | null
+          status?: string
+          reviewed_by?: string | null
+          review_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_applications_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_applications_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_applications_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transaction_items: {
         Row: {
           created_at: string | null

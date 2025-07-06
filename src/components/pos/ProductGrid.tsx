@@ -12,6 +12,7 @@ export function ProductGrid({ onAddToCart }: ProductGridProps) {
         <ProductCatalog 
           onAddToCart={onAddToCart} 
           onAddProduct={() => {}} 
+          singleClickMode={true}
         />
       </div>
     </div>

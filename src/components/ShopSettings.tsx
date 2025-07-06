@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useShop } from '@/hooks/useShop';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,7 +22,10 @@ import {
   Save, 
   Loader2,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  Database,
+  AlertTriangle
 } from 'lucide-react';
 
 interface ShopSettingsData {
@@ -72,6 +77,7 @@ export const ShopSettings = () => {
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -174,6 +180,54 @@ export const ShopSettings = () => {
         }
       }
     }));
+  };
+
+  const clearShopData = async (dataType: string) => {
+    if (!selectedShop) return;
+
+    if (!confirm(`Are you sure you want to clear all ${dataType}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      switch (dataType) {
+        case 'transactions':
+          const { error: txError } = await supabase
+            .from('transactions')
+            .delete()
+            .eq('shop_id', selectedShop.id);
+          if (txError) throw txError;
+          break;
+        case 'products':
+          const { error: prodError } = await supabase
+            .from('products')
+            .delete()
+            .eq('shop_id', selectedShop.id);
+          if (prodError) throw prodError;
+          break;
+        case 'customers':
+          const { error: custError } = await supabase
+            .from('profiles')
+            .delete()
+            .eq('shop_id', selectedShop.id);
+          if (custError) throw custError;
+          break;
+        default:
+          throw new Error('Invalid data type');
+      }
+
+      toast({
+        title: "Success",
+        description: `All ${dataType} cleared successfully.`,
+      });
+    } catch (error) {
+      console.error('Error clearing shop data:', error);
+      toast({
+        title: "Error",
+        description: `Failed to clear ${dataType}.`,
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
@@ -397,6 +451,110 @@ export const ShopSettings = () => {
               checked={settings.notifications_enabled}
               onCheckedChange={(checked) => setSettings(prev => ({ ...prev, notifications_enabled: checked }))}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Data Management */}
+      <Card className="border-red-200">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2 text-red-700">
+            <AlertTriangle className="h-5 w-5" />
+            <span>Data Management</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              These actions will permanently delete all data for your shop. This action cannot be undone.
+            </AlertDescription>
+          </Alert>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Dialog open={dialogOpen.transactions} onOpenChange={(open) => setDialogOpen(prev => ({ ...prev, transactions: open }))}>
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="w-full">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Transactions
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Clear All Transactions</DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete all transaction records for your shop. This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDialogOpen(prev => ({ ...prev, transactions: false }))}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={() => {
+                    clearShopData('transactions');
+                    setDialogOpen(prev => ({ ...prev, transactions: false }));
+                  }}>
+                    Clear Transactions
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialogOpen.products} onOpenChange={(open) => setDialogOpen(prev => ({ ...prev, products: open }))}>
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="w-full">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Products
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Clear All Products</DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete all product records for your shop. This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDialogOpen(prev => ({ ...prev, products: false }))}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={() => {
+                    clearShopData('products');
+                    setDialogOpen(prev => ({ ...prev, products: false }));
+                  }}>
+                    Clear Products
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={dialogOpen.customers} onOpenChange={(open) => setDialogOpen(prev => ({ ...prev, customers: open }))}>
+              <DialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="w-full">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear Customers
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Clear All Customers</DialogTitle>
+                  <DialogDescription>
+                    This will permanently delete all customer records for your shop. This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setDialogOpen(prev => ({ ...prev, customers: false }))}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={() => {
+                    clearShopData('customers');
+                    setDialogOpen(prev => ({ ...prev, customers: false }));
+                  }}>
+                    Clear Customers
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardContent>
       </Card>
