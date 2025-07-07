@@ -288,13 +288,19 @@ export class ThermalPrinter {
     receipt += `Bill#: ${Date.now()}\n`;
     receipt += `Cashier: Staff\n\n`;
 
-    // If direct billing, show the directTitle as the item
+    // If direct billing, show the directTitle as a line item in the item table
+    let directBillingLineAdded = false;
+    receipt += `Item             QTY   Price    Total\n${divider}\n`;
     if (cart.length === 0 && directAmount && directTitle) {
-      receipt += `${this.alignText(directTitle, width, 'center')}\n`;
+      // Add the direct billing title as a line item
+      const name = directTitle.padEnd(16).slice(0, 16);
+      const qty = '  1';
+      const price = directAmount.toFixed(2).padStart(7);
+      const tot = directAmount.toFixed(2).padStart(7);
+      receipt += `${name}${qty} ${price} ${tot}\n`;
+      directBillingLineAdded = true;
     }
 
-    receipt += `Item             QTY   Price    Total\n${divider}\n`;
-    
     cart.forEach((item) => {
       const name = item.name.padEnd(16).slice(0, 16);
       const qty = String(item.quantity).padStart(3);
