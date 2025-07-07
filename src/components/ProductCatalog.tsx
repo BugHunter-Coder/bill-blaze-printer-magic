@@ -299,106 +299,58 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
                     const hasVariants = (product.product_variants && product.product_variants.length > 0);
                     const selectedVar = hasVariants ? (selectedVariantForProduct[product.id] || product.product_variants[0]) : null;
                     const displayPrice = hasVariants && selectedVar ? selectedVar.price : product.price;
+                    const inStock = product.stock_quantity > 0;
 
                     return (
                       <div key={product.id}>
-                        <Card className="group rounded-xl shadow-md border border-gray-200 bg-white hover:shadow-lg transition min-w-[180px] max-w-[240px] flex flex-col h-full">
-                          <CardContent className="p-4 flex flex-col h-full">
-                            {/* Product Image & Badges */}
-                            <div className="relative mb-3">
-                              <div className="aspect-square w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                                {product.image_url ? (
-                                  <img
-                                    src={product.image_url}
-                                    alt={product.name}
-                                    className="w-full h-full object-cover rounded-lg"
-                                  />
-                                ) : (
-                                  <div className="flex flex-col items-center justify-center text-gray-400">
-                                    <Package className="h-10 w-10 mb-1" />
-                                    <span className="text-xs">No Image</span>
-                                  </div>
-                                )}
+                        <Card className="flex flex-col h-full shadow-md hover:shadow-lg transition p-4">
+                          <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-2">
+                            {product.image_url ? (
+                              <img src={product.image_url} alt={product.name} className="object-cover w-full h-full rounded-lg" />
+                            ) : (
+                              <span className="text-gray-400 text-3xl">🛒</span>
+                            )}
+                          </div>
+                          <div className="flex-1 flex flex-col gap-1">
+                            <h3 className="font-semibold text-base text-gray-900 truncate">{product.name}</h3>
+                            {product.description && (
+                              <p className="text-xs text-gray-500 line-clamp-2">{product.description}</p>
+                            )}
+                            {product.product_variants?.length > 0 && (
+                              <div className="flex gap-2 mt-2 flex-wrap">
+                                {product.product_variants.map(variant => (
+                                  <button
+                                    key={variant.id}
+                                    onClick={() => setSelectedVariantForProduct(prev => ({ ...prev, [product.id]: variant }))}
+                                    disabled={variant.stock_quantity === 0}
+                                    className={`px-2 py-0.5 rounded-full border text-xs font-medium transition-all
+                                      ${selectedVariantForProduct[product.id]?.id === variant.id
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'}
+                                      ${variant.stock_quantity === 0 ? 'opacity-50 cursor-not-allowed line-through' : 'cursor-pointer hover:scale-105'}
+                                    `}
+                                  >
+                                    {variant.value} <span className="ml-1">₹{variant.price}</span>
+                                  </button>
+                                ))}
                               </div>
-                              {/* Badges */}
-                              {product.stock_quantity <= product.min_stock_level && (
-                                <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow">
-                                  Low
-                                </div>
-                              )}
-                              {product.has_variants && (
-                                <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow flex items-center gap-1">
-                                  <Settings className="h-4 w-4" />
-                                  <span>Var</span>
-                                </div>
-                              )}
-                            </div>
-                            {/* Product Info */}
-                            <div className="flex-1 flex flex-col gap-1">
-                              <h3 className="font-semibold text-base text-gray-900 truncate" title={product.name}>{product.name}</h3>
-                              {product.description && (
-                                <p className="text-xs text-gray-500 line-clamp-2">{product.description}</p>
-                              )}
-                              {/* Variant Chips */}
-                              {product.has_variants && (
-                                <div className="mt-1 overflow-x-auto pb-1">
-                                  <VariantChipSelector
-                                    variants={product.product_variants ?? []}
-                                    selectedVariant={selectedVariantForProduct[product.id] || null}
-                                    onVariantSelect={(variant) => {
-                                      setSelectedVariantForProduct(prev => ({
-                                        ...prev,
-                                        [product.id]: variant
-                                      }));
-                                    }}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                            {/* Price & Stock Row */}
-                            <div className="flex items-center justify-between mt-3">
-                              <span className="text-lg font-bold text-green-700">
-                                ₹{displayPrice !== undefined && displayPrice !== null ? Number(displayPrice).toFixed(2) : '—'}
-                              </span>
-                              <Badge 
-                                variant={product.has_variants ? "default" : (product.stock_quantity > 0 ? "default" : "destructive")}
-                                className="text-xs px-2 py-1 font-medium ml-2"
-                              >
-                                {product.has_variants ? 'In Stock' : (product.stock_quantity > 0 ? 'In Stock' : 'Out')}
-                              </Badge>
-                            </div>
-                            {/* Add to Cart Button */}
-                            <div className="mt-3">
-                              {singleClickMode ? (
-                                <button
-                                  className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center transition"
-                                  onClick={() => handleAddToCart(product)}
-                                  disabled={product.has_variants ? !selectedVariantForProduct[product.id] : product.stock_quantity === 0}
-                                >
-                                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
-                                  </svg>
-                                  {product.has_variants && selectedVariantForProduct[product.id] 
-                                    ? `Add ${selectedVariantForProduct[product.id].value}`
-                                    : 'Add to Cart'
-                                  }
-                                </button>
-                              ) : (
-                                <Button
-                                  onClick={() => handleAddToCart(product)}
-                                  className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center mt-1"
-                                  size="sm"
-                                  disabled={product.has_variants ? false : product.stock_quantity === 0}
-                                  tabIndex={0}
-                                >
-                                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
-                                  </svg>
-                                  Add to Cart
-                                </Button>
-                              )}
-                            </div>
-                          </CardContent>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-sm font-bold text-green-700">
+                              ₹{displayPrice !== undefined && displayPrice !== null ? Number(displayPrice).toFixed(2) : '—'}
+                            </span>
+                            <Badge className={`text-xs px-2 py-1 font-medium ml-2 ${inStock ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-500'}`}>
+                              {inStock ? 'In Stock' : 'Out of Stock'}
+                            </Badge>
+                          </div>
+                          <Button
+                            onClick={() => handleAddToCart(product)}
+                            className="w-full mt-2 text-xs py-2"
+                            disabled={!inStock}
+                          >
+                            Add to Cart
+                          </Button>
                         </Card>
                       </div>
                     );
