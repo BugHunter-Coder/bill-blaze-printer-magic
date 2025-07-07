@@ -176,37 +176,6 @@ export function SingleClickPayment({
         </CardContent>
       </Card>
 
-      {/* Direct Billing Option */}
-      <div className="space-y-2">
-        <Button
-          variant="outline"
-          onClick={() => setShowDirectBilling(!showDirectBilling)}
-          className="w-full"
-        >
-          Direct Billing
-        </Button>
-        
-        {showDirectBilling && (
-          <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <input
-              type="number"
-              value={directAmount}
-              onChange={(e) => setDirectAmount(e.target.value)}
-              placeholder="Enter amount"
-              className="w-full p-2 border border-gray-300 rounded text-sm"
-              step="0.01"
-            />
-            <Button
-              onClick={handleDirectBilling}
-              disabled={isProcessing || !directAmount || parseFloat(directAmount) <= 0}
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-            >
-              {isProcessing ? 'Processing...' : `Bill ₹${directAmount || '0.00'}`}
-            </Button>
-          </div>
-        )}
-      </div>
-
       {/* Processing Indicator */}
       {isProcessing && (
         <div className="flex items-center justify-center p-4 bg-blue-50 border border-blue-200 rounded-lg">

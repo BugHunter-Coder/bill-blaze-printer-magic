@@ -23,6 +23,10 @@ import { useToast } from '@/hooks/use-toast';
 import { storePrinter, getStoredPrinter, clearStoredPrinter, StoredPrinter } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { thermalPrinter } from '@/lib/ThermalPrinter';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useShop } from '@/hooks/useShop';
+import { useAuth } from '@/hooks/useAuth';
+import DirectBilling from './DirectBilling';
 
 interface POSHeaderProps {
   shopName: string;
@@ -47,6 +51,9 @@ export function POSHeader({
   const [storedPrinter, setStoredPrinter] = useState<StoredPrinter | null>(null);
   const [bluetoothSupported, setBluetoothSupported] = useState(false);
   const [testPrintLoading, setTestPrintLoading] = useState(false);
+  const { selectedShop } = useShop();
+  const { profile: cashier } = useAuth();
+  const [showDirectBilling, setShowDirectBilling] = useState(false);
 
   useEffect(() => {
     // Check Bluetooth support
@@ -312,6 +319,15 @@ export function POSHeader({
       <div className="flex items-center gap-3">
         {/* Printer Management */}
         <div className="flex items-center gap-2">
+          {/* Direct Billing Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDirectBilling(true)}
+            className="hidden sm:flex"
+          >
+            💵 Direct Billing
+          </Button>
           <Button
             variant={printerConnected ? "default" : "outline"}
             size="sm"
@@ -390,6 +406,25 @@ export function POSHeader({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Direct Billing Modal */}
+      <Dialog open={showDirectBilling} onOpenChange={setShowDirectBilling}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Direct Billing</DialogTitle>
+          </DialogHeader>
+          {selectedShop && cashier && (
+            <DirectBilling
+              title="Direct Billing"
+              amount={''}
+              shopDetails={selectedShop}
+              cashier={cashier}
+              printerConnected={printerConnected}
+              onComplete={() => setShowDirectBilling(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
