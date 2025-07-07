@@ -12,6 +12,7 @@ export interface ReceiptData {
   total: number;
   shopDetails: any;
   directAmount?: number;
+  directTitle?: string;
   template?: string;
   logoUrl?: string | null;
   headerLines?: string[];
@@ -261,7 +262,7 @@ export class ThermalPrinter {
 
   // Receipt generation
   private generateReceipt(data: ReceiptData, width: number = 35): string {
-    const { cart, total, shopDetails, directAmount, headerAlign = 'center', footerAlign = 'center', headerLines = [], footerLines = [] } = data;
+    const { cart, total, shopDetails, directAmount, directTitle, headerAlign = 'center', footerAlign = 'center', headerLines = [], footerLines = [] } = data;
     const divider = '-'.repeat(width);
     const sub = directAmount || total;
     const tax = sub * (shopDetails?.tax_rate || 0);
@@ -287,8 +288,19 @@ export class ThermalPrinter {
     receipt += `Bill#: ${Date.now()}\n`;
     receipt += `Cashier: Staff\n\n`;
 
+    // If direct billing, show the directTitle as a line item in the item table
+    let directBillingLineAdded = false;
     receipt += `Item             QTY   Price    Total\n${divider}\n`;
-    
+    if (cart.length === 0 && directAmount && directTitle) {
+      // Add the direct billing title as a line item
+      const name = directTitle.padEnd(16).slice(0, 16);
+      const qty = '  1';
+      const price = directAmount.toFixed(2).padStart(7);
+      const tot = directAmount.toFixed(2).padStart(7);
+      receipt += `${name}${qty} ${price} ${tot}\n`;
+      directBillingLineAdded = true;
+    }
+
     cart.forEach((item) => {
       const name = item.name.padEnd(16).slice(0, 16);
       const qty = String(item.quantity).padStart(3);

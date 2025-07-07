@@ -35,6 +35,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     );
   }
 
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-red-50 to-orange-100 flex">
       {/* Super Admin Sidebar: always visible on desktop, collapsible on mobile */}
