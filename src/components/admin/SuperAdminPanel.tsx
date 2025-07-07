@@ -12,6 +12,7 @@ import { AISettings } from './AISettings';
 import { SubscriptionManager } from './SubscriptionManager';
 import { TransactionManager } from './TransactionManager';
 import { SubscriptionApplicationReview } from './SubscriptionApplicationReview';
+import { useNavigate } from 'react-router-dom';
 
 interface SuperAdminPanelProps {
   shops: Shop[];
@@ -29,6 +30,7 @@ export const SuperAdminPanel = ({
   loadingShops 
 }: SuperAdminPanelProps) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const deleteShop = async (shopId: string) => {
     if (!confirm('Are you sure you want to delete this shop? This action cannot be undone.')) {
@@ -178,6 +180,12 @@ export const SuperAdminPanel = ({
           <AISettings />
         </TabsContent>
       </Tabs>
+      <button
+        className="w-full text-left px-4 py-2 rounded hover:bg-blue-50 font-medium text-blue-700"
+        onClick={() => navigate('/admin/shop-roles')}
+      >
+        🛡️ Roles & Permissions
+      </button>
     </div>
   );
 };

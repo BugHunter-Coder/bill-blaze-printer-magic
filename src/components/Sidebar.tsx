@@ -293,7 +293,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
           description: 'Financial statements'
         }
       ]
-    }
+    },
+    ...(profile && selectedShop && (profile.role === 'admin' || profile.id === selectedShop.owner_id) ? [
+      {
+        title: 'Roles & Permissions',
+        path: '/admin/shop-roles',
+        icon: Shield,
+        description: 'Manage roles and permissions',
+        isActive: isActiveRoute('/admin/shop-roles')
+      }
+    ] : [])
   ];
 
   const systemItems: NavItem[] = [

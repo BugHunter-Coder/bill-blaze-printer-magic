@@ -20,6 +20,7 @@ export interface DatabaseProduct {
     name: string;
     icon?: string;
   };
+  product_variants?: ProductVariant[];
 }
 
 export interface ProductVariant {
@@ -28,6 +29,7 @@ export interface ProductVariant {
   name: string; // e.g., "Size", "Color", "Material"
   value: string; // e.g., "Large", "Red", "Cotton"
   price_modifier: number; // Additional cost for this variant
+  price?: number; // Actual price for this variant (optional for backward compatibility)
   stock_quantity: number;
   min_stock_level: number;
   sku?: string;
@@ -102,7 +104,7 @@ export interface UserProfile {
   id: string;
   shop_id?: string;
   full_name?: string;
-  role: 'admin' | 'cashier' | 'manager';
+  role: 'admin' | 'cashier' | 'manager' | 'super_admin';
   is_active: boolean;
 }
 
@@ -218,3 +220,5 @@ export interface CreateUserData {
   role: string;
   shop_id: string;
 }
+
+export type ProductVariantsByProduct = Record<string, ProductVariant[]>;

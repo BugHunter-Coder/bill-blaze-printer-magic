@@ -2,8 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/hooks/useAuth";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ShopProvider } from "@/hooks/useShop";
 import { Layout } from "@/components/Layout";
 import { ShopSetupRedirect } from "@/components/ShopSetupRedirect";
@@ -38,13 +38,24 @@ import GeneralSettings from "./pages/admin/GeneralSettings";
 import SystemHealth from "./pages/admin/SystemHealth";
 import SystemPerformance from "./pages/admin/SystemPerformance";
 import SupportCenter from "./pages/admin/SupportCenter";
+import ShopRoles from './pages/admin/ShopRoles';
 
 // Transaction page imports
 import TransactionHistoryPage from './pages/transactions/history';
 import TransactionRefundsPage from './pages/transactions/refunds';
 import TransactionPaymentsPage from './pages/transactions/payments';
 
+import AuthCallback from '@/components/auth/AuthCallback';
+
 const queryClient = new QueryClient();
+
+function ProtectedRoute({ children }) {
+  const { profile } = useAuth();
+  if (profile?.role === 'cashier') {
+    return <Navigate to="/pos" replace />;
+  }
+  return children;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -483,81 +494,95 @@ const App = () => (
               <Route 
                 path="/analytics" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <Analytics />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <Analytics />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/analytics/sales" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <Analytics />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <Analytics />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/analytics/customers" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <Analytics />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <Analytics />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/analytics/products" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <Analytics />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <Analytics />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/subscription" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Subscription />
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Subscription />
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/analytics/financial" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <Analytics />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <Analytics />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/products/inventory" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <InventoryPage />
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <InventoryPage />
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               
@@ -565,39 +590,54 @@ const App = () => (
               <Route 
                 path="/transactions/history" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <TransactionHistoryPage />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <TransactionHistoryPage />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/transactions/refunds" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <TransactionRefundsPage />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <TransactionRefundsPage />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/transactions/payments" 
                 element={
-                  <ShopAccessGuard>
-                    <ShopSetupRedirect>
-                      <Layout>
-                        <TransactionPaymentsPage />
-                      </Layout>
-                    </ShopSetupRedirect>
-                  </ShopAccessGuard>
+                  <ProtectedRoute>
+                    <ShopAccessGuard>
+                      <ShopSetupRedirect>
+                        <Layout>
+                          <TransactionPaymentsPage />
+                        </Layout>
+                      </ShopSetupRedirect>
+                    </ShopAccessGuard>
+                  </ProtectedRoute>
                 } 
               />
+              
+              {/* Admin Shop Roles Route */}
+              <Route 
+                path="/admin/shop-roles" 
+                element={<ShopRoles />} 
+              />
+              
+              {/* Auth callback route for Supabase magic link/invite */}
+              <Route path="/auth/callback" element={<AuthCallback />} />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
