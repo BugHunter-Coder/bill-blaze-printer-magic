@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
   public: {
     Tables: {
       categories: {
@@ -384,6 +389,27 @@ export type Database = {
           },
         ]
       }
+      razorpay_config: {
+        Row: {
+          created_at: string | null
+          id: number
+          key_id: string
+          key_secret: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          key_id: string
+          key_secret: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          key_id?: string
+          key_secret?: string
+        }
+        Relationships: []
+      }
       shops: {
         Row: {
           address: string | null
@@ -455,9 +481,13 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          payment_status: string | null
+          razorpay_payment_id: string | null
           stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           subscribed: boolean
           subscription_end: string | null
+          subscription_status: string | null
           subscription_tier: string | null
           updated_at: string
           user_id: string | null
@@ -466,9 +496,13 @@ export type Database = {
           created_at?: string
           email: string
           id?: string
+          payment_status?: string | null
+          razorpay_payment_id?: string | null
           stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           subscribed?: boolean
           subscription_end?: string | null
+          subscription_status?: string | null
           subscription_tier?: string | null
           updated_at?: string
           user_id?: string | null
@@ -477,9 +511,13 @@ export type Database = {
           created_at?: string
           email?: string
           id?: string
+          payment_status?: string | null
+          razorpay_payment_id?: string | null
           stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           subscribed?: boolean
           subscription_end?: string | null
+          subscription_status?: string | null
           subscription_tier?: string | null
           updated_at?: string
           user_id?: string | null
@@ -488,52 +526,45 @@ export type Database = {
       }
       subscription_applications: {
         Row: {
-          id: string
-          shop_id: string
-          shop_name: string
-          owner_id: string
-          requested_tier: string
           application_reason: string | null
-          status: string
-          reviewed_by: string | null
+          created_at: string | null
+          id: string
+          owner_id: string | null
+          requested_tier: string
           review_notes: string | null
-          created_at: string
-          updated_at: string
+          reviewed_by: string | null
+          shop_id: string | null
+          shop_name: string
+          status: string
+          updated_at: string | null
         }
         Insert: {
-          id?: string
-          shop_id: string
-          shop_name: string
-          owner_id: string
-          requested_tier: string
           application_reason?: string | null
-          status?: string
-          reviewed_by?: string | null
+          created_at?: string | null
+          id?: string
+          owner_id?: string | null
+          requested_tier: string
           review_notes?: string | null
-          created_at?: string
-          updated_at?: string
+          reviewed_by?: string | null
+          shop_id?: string | null
+          shop_name: string
+          status?: string
+          updated_at?: string | null
         }
         Update: {
-          id?: string
-          shop_id?: string
-          shop_name?: string
-          owner_id?: string
-          requested_tier?: string
           application_reason?: string | null
-          status?: string
-          reviewed_by?: string | null
+          created_at?: string | null
+          id?: string
+          owner_id?: string | null
+          requested_tier?: string
           review_notes?: string | null
-          created_at?: string
-          updated_at?: string
+          reviewed_by?: string | null
+          shop_id?: string | null
+          shop_name?: string
+          status?: string
+          updated_at?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "subscription_applications_shop_id_fkey"
-            columns: ["shop_id"]
-            isOneToOne: false
-            referencedRelation: "shops"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "subscription_applications_owner_id_fkey"
             columns: ["owner_id"]
@@ -546,6 +577,13 @@ export type Database = {
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_applications_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
             referencedColumns: ["id"]
           },
         ]
@@ -732,7 +770,7 @@ export type Database = {
     Enums: {
       payment_method: "cash" | "card" | "upi" | "bank_transfer" | "other"
       transaction_type: "sale" | "purchase" | "expense" | "refund"
-      user_role: "admin" | "cashier" | "manager"
+      user_role: "admin" | "cashier" | "manager" | "super_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -740,21 +778,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -772,14 +814,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -795,14 +839,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -818,14 +864,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -833,14 +881,16 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
@@ -850,7 +900,7 @@ export const Constants = {
     Enums: {
       payment_method: ["cash", "card", "upi", "bank_transfer", "other"],
       transaction_type: ["sale", "purchase", "expense", "refund"],
-      user_role: ["admin", "cashier", "manager"],
+      user_role: ["admin", "cashier", "manager", "super_admin"],
     },
   },
 } as const

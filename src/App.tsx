@@ -38,6 +38,7 @@ import GeneralSettings from "./pages/admin/GeneralSettings";
 import SystemHealth from "./pages/admin/SystemHealth";
 import SystemPerformance from "./pages/admin/SystemPerformance";
 import SupportCenter from "./pages/admin/SupportCenter";
+import ShopRoles from './pages/admin/ShopRoles';
 
 // Transaction page imports
 import TransactionHistoryPage from './pages/transactions/history';
@@ -596,6 +597,16 @@ const App = () => (
                       </Layout>
                     </ShopSetupRedirect>
                   </ShopAccessGuard>
+                } 
+              />
+              
+              {/* Admin Shop Roles Route */}
+              <Route 
+                path="/admin/shop-roles" 
+                element={
+                  <AdminLayout>
+                    <ShopRoles />
+                  </AdminLayout>
                 } 
               />
               
