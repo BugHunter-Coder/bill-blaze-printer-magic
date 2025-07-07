@@ -147,14 +147,16 @@ const Index = () => {
   }, [user, profile, loading, navigate]);
 
   useEffect(() => {
-    if (selectedShop) {
+    if (profile?.role === 'cashier' && selectedShop) {
+      fetchCashierStats();
+    } else if (selectedShop) {
       fetchDashboardStats();
       fetchMonthlySalesData();
       fetchHourlyData();
       fetchCategoryData();
       generatePerformanceMetrics();
     }
-  }, [selectedShop]);
+  }, [selectedShop, profile]);
 
   const fetchDashboardStats = async () => {
     if (!selectedShop) return;
@@ -335,6 +337,30 @@ const Index = () => {
     ]);
   };
 
+  const fetchCashierStats = async () => {
+    if (!user || !selectedShop) return;
+    setLoadingStats(true);
+    try {
+      // Fetch today's orders for this cashier
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      const { data: transactions, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('shop_id', selectedShop.id)
+        .eq('cashier_id', user.id)
+        .gte('created_at', startOfDay.toISOString());
+      if (error) throw error;
+      const todayOrders = transactions?.length || 0;
+      const todaySales = transactions?.reduce((sum, t) => sum + (t.total_amount || 0), 0) || 0;
+      setStats(prev => ({ ...prev, todayOrders, todaySales }));
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to fetch stats', variant: 'destructive' });
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
   if (loading || loadingStats) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -345,6 +371,35 @@ const Index = () => {
           </div>
           <p className="text-gray-600 font-medium">Loading your dashboard...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (profile?.role === 'cashier') {
+    // Custom cashier dashboard
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 p-4">
+        <Card className="w-full max-w-md mb-8">
+          <CardHeader>
+            <CardTitle className="text-xl">Cashier Dashboard</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-medium">Today's Orders</span>
+              <Badge variant="default" className="text-lg">{stats.todayOrders}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-medium">Today's Sales</span>
+              <Badge variant="secondary" className="text-lg">₹{stats.todaySales.toLocaleString()}</Badge>
+            </div>
+          </CardContent>
+        </Card>
+        <Button
+          className="w-full max-w-md py-4 text-lg bg-green-600 hover:bg-green-700"
+          onClick={() => navigate('/pos')}
+        >
+          Go to POS
+        </Button>
       </div>
     );
   }

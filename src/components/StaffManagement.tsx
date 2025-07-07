@@ -28,7 +28,7 @@ interface StaffMember {
   name: string;
   email: string;
   phone: string;
-  role: 'admin' | 'manager' | 'cashier';
+  role: 'admin' | 'manager' | 'cashier' | 'super_admin';
   updated_at: string;
   is_active: boolean;
   created_at: string;
@@ -47,7 +47,7 @@ export const StaffManagement = () => {
     name: '',
     email: '',
     phone: '',
-    role: 'cashier' as 'admin' | 'manager' | 'cashier'
+    role: 'cashier' as 'admin' | 'manager' | 'cashier' | 'super_admin'
   });
 
   useEffect(() => {
@@ -109,12 +109,12 @@ export const StaffManagement = () => {
     try {
       if (editingStaff) {
         // Update existing staff member
-      const { error } = await supabase
-        .from('profiles')
+        const { error } = await supabase
+          .from('profiles')
           .update({
             full_name: formData.name,
             email: formData.email,
-            role: formData.role as 'admin' | 'manager' | 'cashier',
+            role: formData.role as 'admin' | 'manager' | 'cashier' | 'super_admin',
             updated_at: new Date().toISOString()
           })
           .eq('id', editingStaff.id);
@@ -125,22 +125,24 @@ export const StaffManagement = () => {
           description: "Staff member updated successfully.",
         });
       } else {
-        // Add new staff member
-        const { error } = await supabase
-          .from('profiles')
-          .insert({
-            id: crypto.randomUUID(),
-            shop_id: selectedShop.id,
-            full_name: formData.name,
-            email: formData.email,
-            role: formData.role as 'admin' | 'manager' | 'cashier',
-            is_active: true
-          });
-
-        if (error) throw error;
+        // Invite new staff member via Auth
+        const randomPassword = Math.random().toString(36).slice(-10) + 'Aa1!';
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: randomPassword,
+          options: {
+            emailRedirectTo: window.location.origin + '/auth/callback',
+            data: {
+              full_name: formData.name,
+              role: formData.role,
+              shop_id: selectedShop.id
+            }
+          }
+        });
+        if (signUpError) throw signUpError;
         toast({
-          title: "Success",
-          description: "Staff member added successfully.",
+          title: "Invite sent!",
+          description: "Staff member must complete registration from their email.",
         });
       }
 

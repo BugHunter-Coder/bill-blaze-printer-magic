@@ -131,7 +131,7 @@ export function ZeroClickProductGrid({
       const selectedVariant = selectedVariants[product.id];
       const productWithVariant = {
         ...product,
-        price: product.price + selectedVariant.price_modifier,
+        price: typeof selectedVariant.price === 'number' ? selectedVariant.price : product.price,
         selectedVariant: selectedVariant
       };
       onAddToCart(productWithVariant);
@@ -189,6 +189,12 @@ export function ZeroClickProductGrid({
               const isInCart = cart.some(item => item.id === product.id);
               const cartItem = cart.find(item => item.id === product.id);
               
+              // Find the selected variant for this product
+              const selectedVariant = selectedVariants[product.id] || (product.variants && product.variants[0]);
+              const displayPrice = product.has_variants && selectedVariant
+                ? (typeof selectedVariant.price === 'number' ? selectedVariant.price : product.price)
+                : product.price;
+
               return (
                 <div
                   key={product.id}
@@ -208,7 +214,7 @@ export function ZeroClickProductGrid({
                           {product.name}
                         </div>
                         <div className="text-lg font-bold text-green-600">
-                          ₹{product.price.toFixed(0)}
+                          ₹{displayPrice.toFixed(0)}
                         </div>
                       </div>
                       
@@ -216,7 +222,6 @@ export function ZeroClickProductGrid({
                       {product.has_variants && product.variants && product.variants.length > 0 && (
                         <div className="mt-2">
                           <VariantChipSelector
-                            productId={product.id}
                             variants={product.variants}
                             selectedVariant={selectedVariants[product.id] || null}
                             onVariantSelect={(variant) => {
@@ -225,9 +230,6 @@ export function ZeroClickProductGrid({
                                 [product.id]: variant
                               }));
                             }}
-                            basePrice={product.price}
-                            showPrice={false}
-                            compact={true}
                           />
                         </div>
                       )}

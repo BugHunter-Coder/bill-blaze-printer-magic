@@ -115,9 +115,9 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
                         <Badge variant="outline" className="text-[10px] px-1 py-0.5 bg-blue-50 border-blue-200 text-blue-700">
                           {item.selectedVariant.name}: {item.selectedVariant.value}
                         </Badge>
-                        {item.selectedVariant.price_modifier !== 0 && (
-                          <span className="text-[10px] text-gray-500 font-medium">
-                            {item.selectedVariant.price_modifier > 0 ? '+' : ''}₹{item.selectedVariant.price_modifier.toFixed(2)}
+                        {typeof item.selectedVariant.price === 'number' && (
+                          <span className="text-[10px] text-gray-700 font-medium">
+                            ₹{item.selectedVariant.price.toFixed(2)}
                           </span>
                         )}
                       </div>

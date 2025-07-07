@@ -15,6 +15,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Debug logging
+  console.log('AdminLayout', { user });
+
   // Check if user is a system admin
   const isSystemAdmin = user?.email === 'admin@billblaze.com' || user?.email === 'harjot@iprofit.in';
 

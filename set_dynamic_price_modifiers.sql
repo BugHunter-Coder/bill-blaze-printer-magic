@@ -30,6 +30,28 @@ UPDATE product_variants
 SET price_modifier = 0 
 WHERE value = 'Half';
 
+-- Ensure 'price' column exists
+ALTER TABLE product_variants ADD COLUMN IF NOT EXISTS price DECIMAL(10,2);
+
+-- Set price for all variants where price is null
+UPDATE product_variants
+SET price = (
+  SELECT p.price + COALESCE(product_variants.price_modifier, 0)
+  FROM products p
+  WHERE p.id = product_variants.product_id
+)
+WHERE price IS NULL;
+
+-- Optionally, you can also update all variants to always sync price this way:
+-- UPDATE product_variants
+-- SET price = (
+--   SELECT p.price + COALESCE(product_variants.price_modifier, 0)
+--   FROM products p
+--   WHERE p.id = product_variants.product_id
+-- );
+
+-- Now all variants will have a price for correct UI display
+
 -- Verify the dynamic pricing
 SELECT 
     p.name as product_name,

@@ -26,22 +26,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchProfile = async (userId: string) => {
     try {
       console.log('Fetching profile for user:', userId);
-      
+      // Check if profile exists
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-      
       if (error && error.code === 'PGRST116') {
         // No profile found, create one
         console.log('No profile found, creating new profile for user:', userId);
+        // Get user info from Auth
+        const { data: authUser } = await supabase.auth.getUser();
+        const authEmail = authUser?.user?.email || null;
+        const fullName = authUser?.user?.user_metadata?.full_name || null;
+        // You may want to set shop_id here if you have a default or context
         const { error: insertError } = await supabase
           .from('profiles')
           .insert({ 
             id: userId,
+            email: authEmail,
+            full_name: fullName,
+            is_active: true,
             role: 'cashier',
-            is_active: true
           });
         if (insertError) {
           console.error('Error creating profile:', insertError);
@@ -54,13 +60,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .select('*')
           .eq('id', userId)
           .single();
-        
         if (fetchError) {
           console.error('Error fetching newly created profile:', fetchError);
           setProfile(null);
           return;
         }
-        
         console.log('Successfully created and fetched profile:', newProfile);
         setProfile(newProfile);
         return;
@@ -69,7 +73,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setProfile(null);
         return;
       }
-      
       console.log('Successfully fetched existing profile:', data);
       setProfile(data);
     } catch (error) {

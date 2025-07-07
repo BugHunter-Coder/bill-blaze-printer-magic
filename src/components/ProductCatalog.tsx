@@ -43,7 +43,6 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
   const [loading, setLoading] = useState(true);
   const [showVariantModal, setShowVariantModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<DatabaseProduct | null>(null);
-  const [productVariants, setProductVariants] = useState<ProductVariant[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [expandedVariantProduct, setExpandedVariantProduct] = useState<string | null>(null);
   const [selectedVariantForProduct, setSelectedVariantForProduct] = useState<Record<string, ProductVariant>>({});
@@ -55,45 +54,10 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
     }
   }, [selectedShopId]);
 
-  // Load variants for products with variants
-  useEffect(() => {
-    const loadVariantsForProducts = async () => {
-      if (singleClickMode && products.length > 0) {
-        for (const product of products) {
-          if (product.has_variants) {
-            await fetchProductVariants(product.id);
-          }
-        }
-      }
-    };
-    
-    loadVariantsForProducts();
-  }, [products, singleClickMode]);
-
-  // Set default variant (prefer 'Full', else first) when products or productVariants change
-  useEffect(() => {
-    if (products && products.length > 0 && productVariants.length > 0) {
-      const newDefaults: Record<string, ProductVariant> = {};
-      products.forEach((product) => {
-        if (product.has_variants) {
-          const variantsForProduct = productVariants.filter(v => v.product_id === product.id);
-          if (variantsForProduct.length > 0) {
-            const defaultVar = variantsForProduct.find(v => v.value.toLowerCase() === 'full') || variantsForProduct[0];
-            newDefaults[product.id] = defaultVar;
-          }
-        }
-      });
-      setSelectedVariantForProduct(newDefaults);
-    }
-  }, [products, productVariants]);
-
   const fetchProducts = async () => {
     if (!selectedShopId) return;
-    
     try {
       setLoading(true);
-      console.log('Fetching products for shop:', selectedShopId);
-      
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -102,31 +66,23 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
             id,
             name,
             icon
-          )
+          ),
+          product_variants:product_variants(*)
         `)
         .eq('shop_id', selectedShopId)
         .eq('is_active', true)
         .order('name');
-      
       if (error) throw error;
-      
-      console.log('Fetched products:', data?.length, 'products for shop:', selectedShopId);
       setProducts(data || []);
-      
       // Set default variants for products with variants
-      if (singleClickMode && data) {
-        const defaultVariants: Record<string, ProductVariant> = {};
-        for (const product of data) {
-          if (product.has_variants) {
-            const variants = await fetchProductVariants(product.id);
-            const firstAvailableVariant = variants.find(variant => variant.stock_quantity > 0);
-            if (firstAvailableVariant) {
-              defaultVariants[product.id] = firstAvailableVariant;
-            }
-          }
+      const defaultVariants: Record<string, ProductVariant> = {};
+      for (const product of data || []) {
+        if (product.has_variants && product.product_variants && product.product_variants.length > 0) {
+          const defaultVar = product.product_variants.find((v: ProductVariant) => v.value.toLowerCase() === 'full') || product.product_variants[0];
+          defaultVariants[product.id] = defaultVar;
         }
-        setSelectedVariantForProduct(defaultVariants);
       }
+      setSelectedVariantForProduct(defaultVariants);
     } catch (error) {
       console.error('Error fetching products:', error);
     } finally {
@@ -149,25 +105,6 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
       setCategories(data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
-    }
-  };
-
-  const fetchProductVariants = async (productId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('product_variants')
-        .select('*')
-        .eq('product_id', productId)
-        .eq('is_active', true)
-        .order('name');
-      
-      if (error) throw error;
-      const variants = data || [];
-      setProductVariants(variants);
-      return variants;
-    } catch (error) {
-      console.error('Error fetching product variants:', error);
-      return [];
     }
   };
 
@@ -197,14 +134,14 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
     const product: Product = {
       id: dbProduct.id,
       name: dbProduct.name,
-      price: variant ? (dbProduct.price + variant.price_modifier) : dbProduct.price,
+      price: variant ? variant.price : dbProduct.price,
       category: dbProduct.categories?.name || 'General',
       image: dbProduct.image_url,
       description: dbProduct.description,
       inStock: variant ? variant.stock_quantity > 0 : dbProduct.stock_quantity > 0,
       stock_quantity: variant ? variant.stock_quantity : dbProduct.stock_quantity,
       has_variants: dbProduct.has_variants,
-      variants: productVariants,
+      variants: dbProduct.product_variants ?? [],
       selectedVariant: variant || undefined,
     };
     
@@ -214,7 +151,7 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
 
   const getOptionPrice = (variant: ProductVariant, basePrice?: number) => {
     const price = basePrice || (selectedProduct ? selectedProduct.price : 0);
-    return price + variant.price_modifier;
+    return price + variant.price;
   };
 
   const handleAddToCart = async (product: DatabaseProduct) => {
@@ -227,8 +164,8 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
         onAddToCart(convertedProduct);
       } else {
         // No variant selected, automatically add the first available variant
-        const variants = productVariants.filter(v => v.product_id === product.id);
-        const firstAvailableVariant = variants.find(variant => variant.stock_quantity > 0);
+        const variants = product.product_variants?.filter(v => v.stock_quantity > 0) || [];
+        const firstAvailableVariant = variants[0];
         if (firstAvailableVariant) {
           const convertedProduct = convertToProduct(product, firstAvailableVariant);
           console.log('Adding first available variant to cart:', convertedProduct); // Debug log
@@ -256,17 +193,8 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
       setShowVariantModal(false);
       setSelectedProduct(null);
       setSelectedVariant(null);
-      setProductVariants([]);
     }
   };
-
-  // Auto-select first available variant when variants are loaded
-  useEffect(() => {
-    if (productVariants.length > 0 && !selectedVariant) {
-      const firstAvailableVariant = productVariants.find(v => v.stock_quantity > 0);
-      setSelectedVariant(firstAvailableVariant || productVariants[0]);
-    }
-  }, [productVariants, selectedVariant]);
 
   if (loading) {
     return (
@@ -367,116 +295,114 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
                   </Badge>
                 </div>
                 <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-5">
-                  {categoryProducts.map((product) => (
-                    <div key={product.id}>
-                      <Card className="group rounded-xl shadow-md border border-gray-200 bg-white hover:shadow-lg transition min-w-[180px] max-w-[240px] flex flex-col h-full">
-                        <CardContent className="p-4 flex flex-col h-full">
-                          {/* Product Image & Badges */}
-                          <div className="relative mb-3">
-                            <div className="aspect-square w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
-                              {product.image_url ? (
-                                <img
-                                  src={product.image_url}
-                                  alt={product.name}
-                                  className="w-full h-full object-cover rounded-lg"
-                                />
-                              ) : (
-                                <div className="flex flex-col items-center justify-center text-gray-400">
-                                  <Package className="h-10 w-10 mb-1" />
-                                  <span className="text-xs">No Image</span>
+                  {categoryProducts.map((product) => {
+                    const hasVariants = (product.product_variants && product.product_variants.length > 0);
+                    const selectedVar = hasVariants ? (selectedVariantForProduct[product.id] || product.product_variants[0]) : null;
+                    const displayPrice = hasVariants && selectedVar ? selectedVar.price : product.price;
+
+                    return (
+                      <div key={product.id}>
+                        <Card className="group rounded-xl shadow-md border border-gray-200 bg-white hover:shadow-lg transition min-w-[180px] max-w-[240px] flex flex-col h-full">
+                          <CardContent className="p-4 flex flex-col h-full">
+                            {/* Product Image & Badges */}
+                            <div className="relative mb-3">
+                              <div className="aspect-square w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                                {product.image_url ? (
+                                  <img
+                                    src={product.image_url}
+                                    alt={product.name}
+                                    className="w-full h-full object-cover rounded-lg"
+                                  />
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center text-gray-400">
+                                    <Package className="h-10 w-10 mb-1" />
+                                    <span className="text-xs">No Image</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Badges */}
+                              {product.stock_quantity <= product.min_stock_level && (
+                                <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow">
+                                  Low
+                                </div>
+                              )}
+                              {product.has_variants && (
+                                <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow flex items-center gap-1">
+                                  <Settings className="h-4 w-4" />
+                                  <span>Var</span>
                                 </div>
                               )}
                             </div>
-                            {/* Badges */}
-                            {product.stock_quantity <= product.min_stock_level && (
-                              <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow">
-                                Low
-                              </div>
-                            )}
-                            {product.has_variants && (
-                              <div className="absolute top-2 left-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow flex items-center gap-1">
-                                <Settings className="h-4 w-4" />
-                                <span>Var</span>
-                              </div>
-                            )}
-                          </div>
-                          {/* Product Info */}
-                          <div className="flex-1 flex flex-col gap-1">
-                            <h3 className="font-semibold text-base text-gray-900 truncate" title={product.name}>{product.name}</h3>
-                            {product.description && (
-                              <p className="text-xs text-gray-500 line-clamp-2">{product.description}</p>
-                            )}
-                            {/* Variant Chips */}
-                            {product.has_variants && (
-                              <div className="mt-1 overflow-x-auto pb-1">
-                                <VariantChipSelector
-                                  productId={product.id}
-                                  variants={productVariants}
-                                  selectedVariant={selectedVariantForProduct[product.id] || null}
-                                  onVariantSelect={(variant) => {
-                                    setSelectedVariantForProduct(prev => ({
-                                      ...prev,
-                                      [product.id]: variant
-                                    }));
-                                  }}
-                                  basePrice={product.price}
-                                  showPrice={true}
-                                  compact={true}
-                                />
-                              </div>
-                            )}
-                          </div>
-                          {/* Price & Stock Row */}
-                          <div className="flex items-center justify-between mt-3">
-                            <span className="text-lg font-bold text-green-700">
-                              {product.has_variants && selectedVariantForProduct[product.id] ? (
-                                `₹${(product.price + (selectedVariantForProduct[product.id]?.price_modifier || 0)).toFixed(2)}`
-                              ) : (
-                                `₹${product.price.toFixed(2)}`
+                            {/* Product Info */}
+                            <div className="flex-1 flex flex-col gap-1">
+                              <h3 className="font-semibold text-base text-gray-900 truncate" title={product.name}>{product.name}</h3>
+                              {product.description && (
+                                <p className="text-xs text-gray-500 line-clamp-2">{product.description}</p>
                               )}
-                            </span>
-                            <Badge 
-                              variant={product.has_variants ? "default" : (product.stock_quantity > 0 ? "default" : "destructive")}
-                              className="text-xs px-2 py-1 font-medium ml-2"
-                            >
-                              {product.has_variants ? 'In Stock' : (product.stock_quantity > 0 ? 'In Stock' : 'Out')}
-                            </Badge>
-                          </div>
-                          {/* Add to Cart Button */}
-                          <div className="mt-3">
-                            {singleClickMode ? (
-                              <button
-                                className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center transition"
-                                onClick={() => handleAddToCart(product)}
-                                disabled={product.has_variants ? !selectedVariantForProduct[product.id] : product.stock_quantity === 0}
+                              {/* Variant Chips */}
+                              {product.has_variants && (
+                                <div className="mt-1 overflow-x-auto pb-1">
+                                  <VariantChipSelector
+                                    variants={product.product_variants ?? []}
+                                    selectedVariant={selectedVariantForProduct[product.id] || null}
+                                    onVariantSelect={(variant) => {
+                                      setSelectedVariantForProduct(prev => ({
+                                        ...prev,
+                                        [product.id]: variant
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                            {/* Price & Stock Row */}
+                            <div className="flex items-center justify-between mt-3">
+                              <span className="text-lg font-bold text-green-700">
+                                ₹{displayPrice !== undefined && displayPrice !== null ? Number(displayPrice).toFixed(2) : '—'}
+                              </span>
+                              <Badge 
+                                variant={product.has_variants ? "default" : (product.stock_quantity > 0 ? "default" : "destructive")}
+                                className="text-xs px-2 py-1 font-medium ml-2"
                               >
-                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
-                                </svg>
-                                {product.has_variants && selectedVariantForProduct[product.id] 
-                                  ? `Add ${selectedVariantForProduct[product.id].value}`
-                                  : 'Add to Cart'
-                                }
-                              </button>
-                            ) : (
-                              <Button
-                                onClick={() => handleAddToCart(product)}
-                                className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center mt-1"
-                                size="sm"
-                                disabled={product.has_variants ? false : product.stock_quantity === 0}
-                                tabIndex={0}
-                              >
-                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
-                                </svg>
-                                Add to Cart
-                              </Button>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  ))}
+                                {product.has_variants ? 'In Stock' : (product.stock_quantity > 0 ? 'In Stock' : 'Out')}
+                              </Badge>
+                            </div>
+                            {/* Add to Cart Button */}
+                            <div className="mt-3">
+                              {singleClickMode ? (
+                                <button
+                                  className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center transition"
+                                  onClick={() => handleAddToCart(product)}
+                                  disabled={product.has_variants ? !selectedVariantForProduct[product.id] : product.stock_quantity === 0}
+                                >
+                                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
+                                  </svg>
+                                  {product.has_variants && selectedVariantForProduct[product.id] 
+                                    ? `Add ${selectedVariantForProduct[product.id].value}`
+                                    : 'Add to Cart'
+                                  }
+                                </button>
+                              ) : (
+                                <Button
+                                  onClick={() => handleAddToCart(product)}
+                                  className="w-full h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold flex items-center justify-center mt-1"
+                                  size="sm"
+                                  disabled={product.has_variants ? false : product.stock_quantity === 0}
+                                  tabIndex={0}
+                                >
+                                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
+                                  </svg>
+                                  Add to Cart
+                                </Button>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -496,11 +422,11 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
               <Label>Base Price: ₹{selectedProduct?.price.toFixed(2)}</Label>
             </div>
             
-            {productVariants.length > 0 && (
+            {selectedProduct && selectedProduct.product_variants && selectedProduct.product_variants.length > 0 && (
               <div className="space-y-4">
                 {/* Group variants by name (option type) */}
                 {(() => {
-                  const groupedVariants = productVariants.reduce((groups, variant) => {
+                  const groupedVariants = selectedProduct.product_variants.reduce((groups, variant) => {
                     if (!groups[variant.name]) {
                       groups[variant.name] = [];
                     }
@@ -523,7 +449,7 @@ export const ProductCatalog = ({ onAddToCart, onAddProduct, singleClickMode }: P
                             className="flex items-center gap-2"
                           >
                             <span>{variant.value}</span>
-                            <span className="text-xs font-medium">₹{getOptionPrice(variant, selectedProduct?.price || 0).toFixed(2)}</span>
+                            <span className="text-xs font-medium">₹{getOptionPrice(variant, selectedProduct.price || 0).toFixed(2)}</span>
                             {variant.stock_quantity === 0 && (
                               <span className="text-xs text-red-500">(Out of Stock)</span>
                             )}
