@@ -12,6 +12,7 @@ export interface ReceiptData {
   total: number;
   shopDetails: any;
   directAmount?: number;
+  directTitle?: string;
   template?: string;
   logoUrl?: string | null;
   headerLines?: string[];
@@ -261,7 +262,7 @@ export class ThermalPrinter {
 
   // Receipt generation
   private generateReceipt(data: ReceiptData, width: number = 35): string {
-    const { cart, total, shopDetails, directAmount, headerAlign = 'center', footerAlign = 'center', headerLines = [], footerLines = [] } = data;
+    const { cart, total, shopDetails, directAmount, directTitle, headerAlign = 'center', footerAlign = 'center', headerLines = [], footerLines = [] } = data;
     const divider = '-'.repeat(width);
     const sub = directAmount || total;
     const tax = sub * (shopDetails?.tax_rate || 0);
@@ -286,6 +287,11 @@ export class ThermalPrinter {
     receipt += `\nDate : ${new Date().toLocaleString()}\n`;
     receipt += `Bill#: ${Date.now()}\n`;
     receipt += `Cashier: Staff\n\n`;
+
+    // If direct billing, show the directTitle as the item
+    if (cart.length === 0 && directAmount && directTitle) {
+      receipt += `${this.alignText(directTitle, width, 'center')}\n`;
+    }
 
     receipt += `Item             QTY   Price    Total\n${divider}\n`;
     

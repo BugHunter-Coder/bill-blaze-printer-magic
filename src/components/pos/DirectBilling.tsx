@@ -84,6 +84,7 @@ export function DirectBilling({
             total: subtotal,
             shopDetails,
             directAmount: subtotal,
+            directTitle: billingTitle,
             toast,
           });
           toast({ title: 'Print Success', description: 'Bill printed.' });
