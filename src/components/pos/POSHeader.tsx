@@ -98,7 +98,7 @@ export function POSHeader({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate('/auth');
+    window.location.href = '/auth';
   };
 
   const connectToStoredPrinter = async () => {

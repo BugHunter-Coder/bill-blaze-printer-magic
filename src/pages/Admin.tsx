@@ -155,10 +155,7 @@ const Admin = () => {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      toast({
-        description: "Logout successful!",
-      });
-      navigate('/auth');
+      window.location.href = '/auth';
     } catch (error: any) {
       toast({
         title: "Error",
