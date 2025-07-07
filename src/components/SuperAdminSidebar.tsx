@@ -275,7 +275,7 @@ const SuperAdminSidebar: React.FC<SuperAdminSidebarProps> = ({ isCollapsed, onTo
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate('/auth');
+    window.location.href = '/auth';
   };
 
   const renderNavItem = (item: NavItem, level: number = 0) => {

@@ -32,10 +32,7 @@ export const Layout = ({
       // Import supabase here to avoid circular dependency
       const { supabase } = await import('@/integrations/supabase/client');
       await supabase.auth.signOut();
-      toast({
-        description: "Logout successful!",
-      });
-      navigate('/auth');
+      window.location.href = '/auth';
     } catch (error: any) {
       toast({
         title: "Error",

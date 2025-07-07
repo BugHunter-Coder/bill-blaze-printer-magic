@@ -15,7 +15,7 @@ const ShopDeactivated = () => {
 
   const handleLogout = async () => {
     await signOut();
-    navigate('/auth');
+    window.location.href = '/auth';
   };
 
   const handleRefresh = async () => {
