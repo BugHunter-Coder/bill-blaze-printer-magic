@@ -34,6 +34,10 @@ export function DirectBilling({
   const [billingAmount, setBillingAmount] = useState(amount);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerDOB, setCustomerDOB] = useState('');
 
   const validate = () => {
     if (!billingTitle.trim()) {
@@ -52,6 +56,27 @@ export function DirectBilling({
     if (!validate()) return;
     setIsProcessing(true);
     try {
+      // Upsert customer if any details provided
+      let customerId: string | undefined = undefined;
+      if (customerName || customerPhone || customerEmail || customerDOB) {
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .upsert({
+            shop_id: shopDetails.id,
+            name: customerName || 'Customer',
+            phone: customerPhone || null,
+            email: customerEmail || null,
+            date_of_birth: customerDOB || null,
+            is_active: true,
+          }, { onConflict: 'shop_id,phone' })
+          .select()
+          .single();
+        if (customerError) {
+          toast({ title: 'Customer Save Failed', description: customerError.message, variant: 'destructive' });
+        } else {
+          customerId = customer.id;
+        }
+      }
       // Save transaction
       const subtotal = Number(billingAmount);
       const taxAmount = subtotal * (shopDetails.tax_rate || 0);
@@ -69,6 +94,7 @@ export function DirectBilling({
           payment_method: 'cash',
           is_direct_billing: true,
           notes: billingTitle.trim(),
+          customer_id: customerId,
         })
         .select()
         .single();
@@ -159,6 +185,37 @@ export function DirectBilling({
                 />
                 <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 h-7 w-7 text-green-500" />
               </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              <label className="block text-base font-semibold mb-1 text-blue-900">Customer Details (optional)</label>
+              <Input
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                placeholder="Customer Name"
+                className="text-sm rounded border border-blue-200"
+                maxLength={64}
+              />
+              <Input
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value)}
+                placeholder="Phone"
+                className="text-sm rounded border border-blue-200"
+                maxLength={16}
+              />
+              <Input
+                value={customerEmail}
+                onChange={e => setCustomerEmail(e.target.value)}
+                placeholder="Email"
+                className="text-sm rounded border border-blue-200"
+                maxLength={64}
+              />
+              <Input
+                type="date"
+                value={customerDOB}
+                onChange={e => setCustomerDOB(e.target.value)}
+                placeholder="Date of Birth"
+                className="text-sm rounded border border-blue-200"
+              />
             </div>
             {error && <Badge variant="destructive" className="w-full text-center py-2 text-base">{error}</Badge>}
             <Button

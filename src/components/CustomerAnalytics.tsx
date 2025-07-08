@@ -137,39 +137,42 @@ export const CustomerAnalytics = () => {
   const fetchCustomerData = async () => {
     try {
       setLoading(true);
-      
       if (!selectedShopId) return;
+
+      // Fetch all customers for this shop
+      const { data: customers, error: customersError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('shop_id', selectedShopId);
+      if (customersError) throw customersError;
 
       const daysAgo = new Date();
       daysAgo.setDate(daysAgo.getDate() - parseInt(timeframe));
 
-      // Fetch transactions for customer analysis
+      // Fetch transactions for this shop and timeframe
       const { data: transactions, error: transactionsError } = await supabase
         .from('transactions')
         .select('*')
         .eq('shop_id', selectedShopId)
         .gte('created_at', daysAgo.toISOString())
         .order('created_at', { ascending: false });
-
       if (transactionsError) throw transactionsError;
 
-      // Analyze customer data
+      // Map customerId to customer info
       const customerMap = new Map();
-      const customerOrderCount = new Map();
-      const customerTotalSpent = new Map();
+      customers.forEach(c => {
+        customerMap.set(c.id, {
+          name: c.name,
+          totalSpent: 0,
+          orderCount: 0,
+          lastOrder: null,
+        });
+      });
 
+      // Analyze transactions for this shop
       transactions?.forEach(transaction => {
-        const customerId = transaction.customer_id || 'anonymous';
-        
-        if (!customerMap.has(customerId)) {
-          customerMap.set(customerId, {
-            firstOrder: transaction.created_at,
-            lastOrder: transaction.created_at,
-            orderCount: 0,
-            totalSpent: 0
-          });
-        }
-
+        const customerId = transaction.customer_id;
+        if (!customerId || !customerMap.has(customerId)) return;
         const customer = customerMap.get(customerId);
         customer.orderCount += 1;
         customer.totalSpent += transaction.total_amount;
@@ -177,20 +180,15 @@ export const CustomerAnalytics = () => {
       });
 
       // Calculate metrics
-      const totalCustomers = customerMap.size;
+      const totalCustomers = customers.length;
       const repeatCustomers = Array.from(customerMap.values()).filter(c => c.orderCount > 1).length;
       const totalRevenue = Array.from(customerMap.values()).reduce((sum, c) => sum + c.totalSpent, 0);
       const averageOrderValue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
       const customerRetentionRate = totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0;
 
       // Get top customers
-      const topCustomers = Array.from(customerMap.entries())
-        .map(([id, data]) => ({
-          name: id === 'anonymous' ? 'Anonymous Customer' : `Customer ${id}`,
-          totalSpent: data.totalSpent,
-          orderCount: data.orderCount,
-          lastOrder: data.lastOrder
-        }))
+      const topCustomers = Array.from(customerMap.values())
+        .filter(c => c.orderCount > 0)
         .sort((a, b) => b.totalSpent - a.totalSpent)
         .slice(0, 5);
 
@@ -201,12 +199,11 @@ export const CustomerAnalytics = () => {
         { segment: 'Occasional', count: topCustomers.filter(c => c.totalSpent > 100 && c.totalSpent <= 500).length, percentage: 0, color: '#FFBB28' },
         { segment: 'New', count: topCustomers.filter(c => c.totalSpent <= 100).length, percentage: 0, color: '#FF8042' }
       ];
-
       segments.forEach(segment => {
         segment.percentage = totalCustomers > 0 ? (segment.count / totalCustomers) * 100 : 0;
       });
 
-      // Generate customer growth data (simplified)
+      // Generate customer growth data (placeholder)
       const customerGrowth = [
         { month: 'Jan', newCustomers: Math.floor(Math.random() * 20) + 5, totalCustomers: Math.floor(Math.random() * 100) + 50 },
         { month: 'Feb', newCustomers: Math.floor(Math.random() * 20) + 5, totalCustomers: Math.floor(Math.random() * 100) + 50 },
@@ -218,7 +215,7 @@ export const CustomerAnalytics = () => {
 
       setCustomerData({
         totalCustomers,
-        newCustomers: Math.floor(totalCustomers * 0.3), // Simplified calculation
+        newCustomers: Math.floor(totalCustomers * 0.3), // Placeholder
         repeatCustomers,
         averageOrderValue,
         customerRetentionRate,
@@ -226,7 +223,6 @@ export const CustomerAnalytics = () => {
         customerGrowth,
         customerSegments: segments
       });
-
     } catch (error) {
       console.error('Error fetching customer data:', error);
       toast({

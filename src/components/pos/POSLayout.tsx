@@ -226,6 +226,14 @@ export default function POSLayout() {
 
       console.log('✅ Transaction created:', transaction.id);
 
+      // Update customer's total_purchases and last_purchase_date using Postgres function
+      if (customerId) {
+        await supabase.rpc('increment_customer_total', {
+          customer_id: customerId,
+          amount: totalAmount,
+        });
+      }
+
       // Insert transaction items
       if (!directAmount && cart.length > 0) {
         const transactionItems = cart.map(item => ({

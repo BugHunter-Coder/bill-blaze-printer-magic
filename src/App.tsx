@@ -46,6 +46,9 @@ import TransactionRefundsPage from './pages/transactions/refunds';
 import TransactionPaymentsPage from './pages/transactions/payments';
 
 import AuthCallback from '@/components/auth/AuthCallback';
+import CustomerListPage from './pages/customers/list';
+import CustomerAnalyticsPage from './pages/customers/analytics';
+import LoyaltyProgramStartPage from './pages/customers/loyalty';
 
 const queryClient = new QueryClient();
 
@@ -638,6 +641,15 @@ const App = () => (
               
               {/* Auth callback route for Supabase magic link/invite */}
               <Route path="/auth/callback" element={<AuthCallback />} />
+              
+              {/* Customer List Route */}
+              <Route path="/customers/list" element={<CustomerListPage />} />
+              
+              {/* Customer Analytics Route */}
+              <Route path="/customers/analytics" element={<CustomerAnalyticsPage />} />
+
+              {/* Customer Loyalty Program Route */}
+              <Route path="/customers/loyalty" element={<LoyaltyProgramStartPage />} />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
