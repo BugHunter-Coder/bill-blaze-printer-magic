@@ -11,6 +11,11 @@ import { Receipt, Search, Filter, Download, Trash2, Eye, Store, Users, DollarSig
 import { Shop } from '@/types/pos';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import bcrypt from 'bcryptjs';
+import { useShop } from '@/hooks/useShop';
+import { useSensitiveMask } from '@/components/SensitiveMaskContext';
 
 interface TransactionManagerProps {
   shops: Shop[];
@@ -32,15 +37,36 @@ interface Transaction {
 export const TransactionManager = ({ shops }: TransactionManagerProps) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedShop, setSelectedShop] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const { toast } = useToast();
+  const { maskSensitive, setMaskSensitive } = useSensitiveMask();
+  const [pinModal, setPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [shopPinHash, setShopPinHash] = useState<string | null>(null);
+  const [selectedShopId, setSelectedShopId] = useState<string>('all');
+
+  useEffect(() => {
+    // Fetch the shop's sensitive_data_pin hash
+    const fetchPin = async () => {
+      if (!selectedShopId || selectedShopId === 'all') return;
+      const { data, error } = await supabase
+        .from('shops')
+        .select('sensitive_data_pin')
+        .eq('id', selectedShopId)
+        .single();
+      if (!error && data && typeof data.sensitive_data_pin === 'string') {
+        setShopPinHash(data.sensitive_data_pin);
+      }
+    };
+    fetchPin();
+  }, [selectedShopId]);
 
   useEffect(() => {
     fetchTransactions();
-  }, [shops, selectedShop]);
+  }, [shops, selectedShopId]);
 
   const fetchTransactions = async () => {
     try {
@@ -55,8 +81,8 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
         .order('created_at', { ascending: false });
 
       // Filter by shop if selected
-      if (selectedShop !== 'all') {
-        query = query.eq('shop_id', selectedShop);
+      if (selectedShopId !== 'all') {
+        query = query.eq('shop_id', selectedShopId);
       }
 
       const { data, error } = await query;
@@ -201,6 +227,33 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
   const totalRevenue = filteredTransactions.reduce((sum, tx) => sum + tx.total_amount, 0);
   const totalTransactions = filteredTransactions.length;
 
+  const handleMaskToggle = async (checked: boolean) => {
+    if (!checked) {
+      // Unmasking, no PIN needed
+      setMaskSensitive(false);
+      return;
+    }
+    // Masking: require PIN
+    setPinInput('');
+    setPinError('');
+    setPinModal(true);
+  };
+
+  const handlePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopPinHash) {
+      setPinError('No PIN set for this shop.');
+      return;
+    }
+    const match = await bcrypt.compare(pinInput, shopPinHash);
+    if (match) {
+      setMaskSensitive(true);
+      setPinModal(false);
+    } else {
+      setPinError('Incorrect PIN');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8 sm:py-12">
@@ -212,6 +265,11 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Mask Sensitive Data Toggle */}
+      <div className="flex items-center justify-end mb-4">
+        <span className="mr-2 font-medium">Mask All Sensitive Data</span>
+        <Switch checked={maskSensitive} onCheckedChange={handleMaskToggle} />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center text-lg sm:text-xl">
@@ -224,7 +282,7 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             <div className="space-y-2">
               <Label htmlFor="shop-filter" className="text-sm">Shop</Label>
-              <Select value={selectedShop} onValueChange={setSelectedShop}>
+              <Select value={selectedShopId} onValueChange={setSelectedShopId}>
                 <SelectTrigger id="shop-filter" className="text-sm">
                   <SelectValue placeholder="All shops" />
                 </SelectTrigger>
@@ -298,7 +356,9 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
                   <Receipt className="h-4 w-4 text-blue-600" />
                   <div>
                     <p className="text-sm font-medium text-blue-800">Total Transactions</p>
-                    <p className="text-lg font-bold text-blue-900">{totalTransactions}</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {!maskSensitive ? totalTransactions : '****'}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -309,7 +369,9 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
                   <DollarSign className="h-4 w-4 text-green-600" />
                   <div>
                     <p className="text-sm font-medium text-green-800">Total Revenue</p>
-                    <p className="text-lg font-bold text-green-900">₹{totalRevenue.toLocaleString()}</p>
+                    <p className="text-lg font-bold text-green-900">
+                      {!maskSensitive ? `₹${totalRevenue.toLocaleString()}` : '****'}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -356,7 +418,9 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
                     <tr key={tx.id} className="border-b hover:bg-gray-50">
                       <td className="p-2 font-medium">{tx.shop_name}</td>
                       <td className="p-2 text-gray-600">{tx.id.slice(0, 8)}...</td>
-                      <td className="p-2 font-semibold">₹{tx.total_amount}</td>
+                      <td className="p-2 font-semibold">
+                        {!maskSensitive ? `₹${tx.total_amount}` : '****'}
+                      </td>
                       <td className="p-2">
                         <Badge variant="outline" className="text-xs">
                           {tx.payment_method}
@@ -457,6 +521,26 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* PIN Modal */}
+      <Dialog open={pinModal} onOpenChange={setPinModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter PIN to Mask Data</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePinSubmit} className="space-y-4">
+            <Input
+              type="password"
+              value={pinInput}
+              onChange={e => setPinInput(e.target.value)}
+              placeholder="PIN"
+              autoFocus
+            />
+            {pinError && <div className="text-red-500 text-sm">{pinError}</div>}
+            <Button type="submit" className="w-full">Mask Data</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }; 

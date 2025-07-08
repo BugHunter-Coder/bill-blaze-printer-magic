@@ -27,6 +27,8 @@ import {
   Database,
   AlertTriangle
 } from 'lucide-react';
+import bcrypt from 'bcryptjs';
+import { useSensitiveMask } from '@/components/SensitiveMaskContext';
 
 interface ShopSettingsData {
   name: string;
@@ -79,11 +81,40 @@ export const ShopSettings = () => {
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState<{ [key: string]: boolean }>({});
   const { toast } = useToast();
+  const [pin, setPin] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [pinSaving, setPinSaving] = useState(false);
+  const [pinError, setPinError] = useState('');
+  const [pinSuccess, setPinSuccess] = useState('');
+  const { maskSensitive, setMaskSensitive } = useSensitiveMask();
+  const [pinModal, setPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [shopPinHash, setShopPinHash] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedShop) {
       loadShopSettings();
     }
+  }, [selectedShop]);
+
+  useEffect(() => {
+    localStorage.setItem('maskSensitive', maskSensitive.toString());
+  }, [maskSensitive]);
+
+  useEffect(() => {
+    // Fetch the shop's sensitive_data_pin hash
+    const fetchPin = async () => {
+      if (!selectedShop || typeof selectedShop !== 'object' || !('id' in selectedShop) || !selectedShop.id) return;
+      const { data, error } = await supabase
+        .from('shops')
+        .select('sensitive_data_pin')
+        .eq('id', selectedShop.id)
+        .single();
+      if (!error && data && typeof data.sensitive_data_pin === 'string') {
+        setShopPinHash(data.sensitive_data_pin);
+      }
+    };
+    fetchPin();
   }, [selectedShop]);
 
   const loadShopSettings = async () => {
@@ -110,10 +141,14 @@ export const ShopSettings = () => {
           currency: data.currency || 'INR',
           timezone: data.timezone || 'Asia/Kolkata',
           business_hours: typeof data.business_hours === 'string' ? JSON.parse(data.business_hours) : (data.business_hours || settings.business_hours),
-          tax_rate: data.tax_rate || 18,
+          tax_rate: (data.tax_rate || 0) * 100,
           auto_backup: data.auto_backup ?? true,
           notifications_enabled: data.notifications_enabled ?? true
         });
+        setPin('');
+        setPinConfirm('');
+        setPinError('');
+        setPinSuccess('');
       }
     } catch (error) {
       console.error('Error loading shop settings:', error);
@@ -144,7 +179,7 @@ export const ShopSettings = () => {
           currency: settings.currency,
           timezone: settings.timezone,
           business_hours: settings.business_hours,
-          tax_rate: settings.tax_rate,
+          tax_rate: settings.tax_rate / 100,
           auto_backup: settings.auto_backup,
           notifications_enabled: settings.notifications_enabled,
           updated_at: new Date().toISOString()
@@ -227,6 +262,63 @@ export const ShopSettings = () => {
         description: `Failed to clear ${dataType}.`,
         variant: "destructive",
       });
+    }
+  };
+
+  const handlePinSave = async () => {
+    setPinError('');
+    setPinSuccess('');
+    if (!pin || pin.length < 4) {
+      setPinError('PIN must be at least 4 digits.');
+      return;
+    }
+    if (pin !== pinConfirm) {
+      setPinError('PINs do not match.');
+      return;
+    }
+    if (!selectedShop) return;
+    setPinSaving(true);
+    try {
+      const hash = await bcrypt.hash(pin, 10);
+      const { error } = await supabase
+        .from('shops')
+        .update({ sensitive_data_pin: hash, updated_at: new Date().toISOString() })
+        .eq('id', selectedShop.id);
+      if (error) throw error;
+      setPin('');
+      setPinConfirm('');
+      setPinSuccess('PIN set successfully.');
+    } catch (err: unknown) {
+      setPinError('Failed to set PIN.');
+    } finally {
+      setPinSaving(false);
+    }
+  };
+
+  const handleMaskToggle = async (checked: boolean) => {
+    if (!checked) {
+      // Unmasking, no PIN needed
+      setMaskSensitive(false);
+      return;
+    }
+    // Masking: require PIN
+    setPinInput('');
+    setPinError('');
+    setPinModal(true);
+  };
+
+  const handlePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopPinHash) {
+      setPinError('No PIN set for this shop.');
+      return;
+    }
+    const match = await bcrypt.compare(pinInput, shopPinHash);
+    if (match) {
+      setMaskSensitive(true);
+      setPinModal(false);
+    } else {
+      setPinError('Incorrect PIN');
     }
   };
 
@@ -558,6 +650,81 @@ export const ShopSettings = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Protect Sensitive Data */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Protect Sensitive Data</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="pin">Set/Change Sensitive Data PIN</Label>
+            <Input
+              id="pin"
+              type="password"
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              placeholder="Enter new PIN"
+              maxLength={12}
+              minLength={4}
+              autoComplete="new-password"
+            />
+            <Input
+              id="pin-confirm"
+              type="password"
+              value={pinConfirm}
+              onChange={e => setPinConfirm(e.target.value)}
+              placeholder="Confirm new PIN"
+              maxLength={12}
+              minLength={4}
+              autoComplete="new-password"
+            />
+            {pinError && <Alert variant="destructive"><AlertDescription>{pinError}</AlertDescription></Alert>}
+            {pinSuccess && <Alert variant="default"><AlertDescription className="text-green-600">{pinSuccess}</AlertDescription></Alert>}
+            <Button onClick={handlePinSave} disabled={pinSaving}>
+              {pinSaving ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />} Set PIN
+            </Button>
+            <div className="text-xs text-muted-foreground mt-2">
+              This PIN will be required to reveal sensitive data (e.g., sales, transactions). Keep it secure.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sensitive Data Masking Toggle */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Mask All Sensitive Data</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <span className="font-medium">Mask All Sensitive Data</span>
+            <Switch checked={maskSensitive} onCheckedChange={handleMaskToggle} />
+          </div>
+          <div className="text-xs text-muted-foreground mt-2">
+            When enabled, all sensitive data (e.g., sales, transactions) will be masked until unmasked by a user with the correct PIN.
+          </div>
+        </CardContent>
+      </Card>
+
+      <Dialog open={pinModal} onOpenChange={setPinModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter PIN to Mask Data</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePinSubmit} className="space-y-4">
+            <Input
+              type="password"
+              value={pinInput}
+              onChange={e => setPinInput(e.target.value)}
+              placeholder="PIN"
+              autoFocus
+            />
+            {pinError && <div className="text-red-500 text-sm">{pinError}</div>}
+            <Button type="submit" className="w-full">Mask Data</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Save Button */}
       <div className="flex justify-end">

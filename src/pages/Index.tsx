@@ -65,6 +65,10 @@ import { MobileSubscriptionCard } from '@/components/MobileSubscriptionCard';
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, Legend, BarChart, LineChart as RechartsLineChart, Area, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { TransactionManager } from '@/components/admin/TransactionManager';
+import bcrypt from 'bcryptjs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { useSensitiveMask } from '@/components/SensitiveMaskContext';
 
 interface DashboardStats {
   todayOrders: number;
@@ -133,6 +137,11 @@ const Index = () => {
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [shopPinHash, setShopPinHash] = useState<string | null>(null);
+  const { maskSensitive, setMaskSensitive } = useSensitiveMask();
 
   // Check if user should be redirected to admin panel - ONLY for system admins
   useEffect(() => {
@@ -158,6 +167,22 @@ const Index = () => {
       generatePerformanceMetrics();
     }
   }, [selectedShop, profile]);
+
+  useEffect(() => {
+    // Fetch the shop's sensitive_data_pin hash
+    const fetchPin = async () => {
+      if (!selectedShop || !selectedShop.id) return;
+      const { data, error } = await supabase
+        .from('shops')
+        .select('sensitive_data_pin')
+        .eq('id', selectedShop.id)
+        .single();
+      if (!error && data && typeof data.sensitive_data_pin === 'string') {
+        setShopPinHash(data.sensitive_data_pin);
+      }
+    };
+    fetchPin();
+  }, [selectedShop]);
 
   const fetchDashboardStats = async () => {
     if (!selectedShop) return;
@@ -362,6 +387,27 @@ const Index = () => {
     }
   };
 
+  const handleMaskedClick = () => {
+    setPinInput('');
+    setPinError('');
+    setShowPinModal(true);
+  };
+
+  const handlePinSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shopPinHash) {
+      setPinError('No PIN set for this shop.');
+      return;
+    }
+    const match = await bcrypt.compare(pinInput, shopPinHash);
+    if (match) {
+      setMaskSensitive(false);
+      setShowPinModal(false);
+    } else {
+      setPinError('Incorrect PIN');
+    }
+  };
+
   if (loading || loadingStats) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -391,7 +437,7 @@ const Index = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-lg font-medium">Today's Sales</span>
-              <Badge variant="secondary" className="text-lg">₹{stats.todaySales.toLocaleString()}</Badge>
+              <Badge variant="secondary" className="text-lg">₹{maskSensitive ? <span className="cursor-pointer text-gray-400" onClick={handleMaskedClick}>****</span> : stats.todaySales.toLocaleString()}</Badge>
             </div>
           </CardContent>
         </Card>
@@ -527,7 +573,7 @@ const Index = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">₹{stats.todaySales.toLocaleString()}</div>
+                  <div className="text-2xl font-bold text-gray-900">₹{maskSensitive ? <span className="cursor-pointer text-gray-400" onClick={handleMaskedClick}>****</span> : stats.todaySales.toLocaleString()}</div>
                   <div className="flex items-center mt-2">
                     <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
                     <span className="text-sm text-green-600">+{stats.monthlyGrowth}%</span>
@@ -569,7 +615,7 @@ const Index = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-gray-900">₹{stats.averageOrderValue.toFixed(0)}</div>
+                  <div className="text-2xl font-bold text-gray-900">₹{maskSensitive ? <span className="cursor-pointer text-gray-400" onClick={handleMaskedClick}>****</span> : stats.averageOrderValue.toFixed(0)}</div>
                   <div className="flex items-center mt-2">
                     <TrendingUp className="h-4 w-4 text-green-600 mr-1" />
                     <span className="text-sm text-green-600">+8%</span>
@@ -636,7 +682,7 @@ const Index = () => {
                           <YAxis 
                             tick={{ fontSize: 12 }}
                             stroke="#6b7280"
-                            tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
+                            tickFormatter={(value) => maskSensitive ? '****' : `₹${(value / 1000).toFixed(0)}k`}
                           />
                           <Tooltip 
                             contentStyle={{ 
@@ -644,12 +690,12 @@ const Index = () => {
                               border: '1px solid #e5e7eb',
                               borderRadius: '8px'
                             }}
-                            formatter={(value: any) => [`₹${value.toLocaleString()}`, 'Sales']}
+                            formatter={(value: any) => maskSensitive ? ['****', 'Sales'] : [`₹${value.toLocaleString()}`, 'Sales']}
                           />
                           <Legend />
                           <Line 
                             type="monotone" 
-                            dataKey="sales" 
+                            dataKey={maskSensitive ? () => null : 'sales'} 
                             stroke="#3b82f6" 
                             strokeWidth={3}
                             dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
@@ -657,7 +703,7 @@ const Index = () => {
                           />
                           <Line 
                             type="monotone" 
-                            dataKey="profit" 
+                            dataKey={maskSensitive ? () => null : 'profit'} 
                             stroke="#10b981" 
                             strokeWidth={2}
                             dot={{ fill: '#10b981', strokeWidth: 2, r: 3 }}
@@ -985,6 +1031,24 @@ const Index = () => {
       <div className="mt-8">
         <TransactionManager shops={shops} />
       </div>
+      <Dialog open={showPinModal} onOpenChange={setShowPinModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enter PIN to Reveal Data</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handlePinSubmit} className="space-y-4">
+            <Input
+              type="password"
+              value={pinInput}
+              onChange={e => setPinInput(e.target.value)}
+              placeholder="PIN"
+              autoFocus
+            />
+            {pinError && <div className="text-red-500 text-sm">{pinError}</div>}
+            <Button type="submit" className="w-full">Reveal</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
