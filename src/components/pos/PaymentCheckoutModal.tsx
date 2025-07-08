@@ -19,6 +19,7 @@ import {
 import { thermalPrinter } from '@/lib/ThermalPrinter';
 import { useMediaQuery } from 'react-responsive';
 import React from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PaymentCheckoutModalProps {
   isOpen: boolean;
@@ -28,7 +29,8 @@ interface PaymentCheckoutModalProps {
   shopDetails: Shop;
   onCompleteOrder: (
     method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
-    directAmount?: number
+    directAmount?: number,
+    customerDetails?: { name: string; phone: string; email: string }
   ) => Promise<void>;
   printerConnected: boolean;
   onPrinterChange: (device: BluetoothDevice | null) => void;
@@ -59,6 +61,9 @@ export function PaymentCheckoutModal({
   const [showDetails, setShowDetails] = useState(false);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
 
   const tax = total * (shopDetails?.tax_rate || 0);
   const finalTotal = total + tax;
@@ -69,7 +74,15 @@ export function PaymentCheckoutModal({
 
     setIsProcessing(true);
     try {
-      await onCompleteOrder(paymentMethod, isDirectBilling ? parseFloat(directAmount) : undefined);
+      await onCompleteOrder(
+        paymentMethod,
+        isDirectBilling ? parseFloat(directAmount) : undefined,
+        {
+          name: customerName,
+          phone: customerPhone,
+          email: customerEmail,
+        }
+      );
       // Print after payment if printer is connected and device is available
       console.log('[POS] printerConnected:', printerConnected, 'printerDevice:', printerDevice);
       if (printerConnected && printerDevice) {
@@ -247,6 +260,34 @@ export function PaymentCheckoutModal({
 
           {/* Right Side - Payment Options */}
           <div className="w-full md:w-80 flex flex-col gap-3 text-sm mobile:w-full">
+            {/* Customer Details (optional) */}
+            <div className="mb-2">
+              <div className="font-semibold mb-1">Customer (optional)</div>
+              <input
+                type="text"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                placeholder="Customer Name"
+                className="w-full p-2 border border-gray-300 rounded text-sm mb-1"
+                maxLength={64}
+              />
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value)}
+                placeholder="Phone"
+                className="w-full p-2 border border-gray-300 rounded text-sm mb-1"
+                maxLength={16}
+              />
+              <input
+                type="email"
+                value={customerEmail}
+                onChange={e => setCustomerEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full p-2 border border-gray-300 rounded text-sm"
+                maxLength={64}
+              />
+            </div>
             {/* Payment Method Selection */}
             <div>
               <div className="font-semibold mb-1">Payment</div>
