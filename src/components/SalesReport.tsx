@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CalendarDays, TrendingUp, TrendingDown, DollarSign, Loader2, Store } from 'lucide-react';
+import { CalendarDays, TrendingUp, TrendingDown, DollarSign, Loader2, Store, Eye } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useShop } from '@/hooks/useShop';
 import type { Database } from '@/integrations/supabase/types';
@@ -9,6 +9,15 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TransactionDetails } from './TransactionDetails';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  flexRender,
+  ColumnDef,
+} from '@tanstack/react-table';
+import { motion, useAnimation } from 'framer-motion';
 
 type Transaction = Database['public']['Tables']['transactions']['Row'];
 type TransactionItem = Database['public']['Tables']['transaction_items']['Row'];
@@ -32,6 +41,28 @@ interface DailyReport {
   }>;
 }
 
+// Animated Counter Hook
+function useAnimatedNumber(value: number, duration = 800) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let start = display;
+    let startTime: number | null = null;
+    const step = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      setDisplay(start + (value - start) * progress);
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        setDisplay(value);
+      }
+    };
+    requestAnimationFrame(step);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return Math.round(display);
+}
+
 export const SalesReport = () => {
   const { selectedShopId, selectedShop } = useShop();
   const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
@@ -41,6 +72,80 @@ export const SalesReport = () => {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [showTransactionDetails, setShowTransactionDetails] = useState(false);
   const { toast } = useToast();
+
+  // TanStack Table setup for recent transactions
+  const [sorting, setSorting] = useState([]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageSize = 10;
+
+  const columns = useMemo<ColumnDef<Transaction>[]>(
+    () => [
+      {
+        accessorKey: 'invoice_number',
+        header: 'Invoice #',
+        cell: info => `#${info.getValue()}`,
+      },
+      {
+        accessorKey: 'created_at',
+        header: 'Date',
+        cell: info => new Date(info.getValue() as string).toLocaleDateString(),
+      },
+      {
+        accessorKey: 'total_amount',
+        header: 'Amount',
+        cell: info => `₹${Number(info.getValue()).toFixed(2)}`,
+      },
+      {
+        accessorKey: 'payment_method',
+        header: 'Payment',
+        cell: info => (
+          <Badge variant="outline" className="text-xs">{info.getValue() as string}</Badge>
+        ),
+      },
+      {
+        accessorKey: 'is_direct_billing',
+        header: 'Type',
+        cell: info => (
+          <Badge variant={info.getValue() ? 'secondary' : 'default'} className="text-xs">
+            {info.getValue() ? 'Direct' : 'Regular'}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }) => (
+          <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => handleTransactionClick(row.original)}>
+            <Eye className="h-3 w-3" />
+          </Button>
+        ),
+      },
+    ],
+    []
+  );
+
+  const table = useReactTable({
+    data: transactions,
+    columns,
+    state: {
+      sorting,
+      pagination: { pageIndex, pageSize },
+    },
+    onSortingChange: setSorting,
+    onPaginationChange: updater => {
+      if (typeof updater === 'function') {
+        setPageIndex(updater({ pageIndex, pageSize }).pageIndex);
+      } else {
+        setPageIndex(updater.pageIndex);
+      }
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: false,
+    manualSorting: false,
+    pageCount: Math.ceil(transactions.length / pageSize),
+  });
 
   useEffect(() => {
     if (selectedShopId) {
@@ -198,9 +303,19 @@ export const SalesReport = () => {
     setDailyReports(sortedReports);
   };
 
-  const totalSales = dailyReports.reduce((sum, report) => sum + report.totalSales, 0);
-  const totalExpenses = dailyReports.reduce((sum, report) => sum + report.totalExpenses, 0);
-  const totalProfit = totalSales - totalExpenses;
+  // Animated metrics
+  const totalSales = useAnimatedNumber(
+    dailyReports.reduce((sum, d) => sum + d.totalSales, 0)
+  );
+  const totalProfit = useAnimatedNumber(
+    dailyReports.reduce((sum, d) => sum + d.totalProfit, 0)
+  );
+  const totalTransactions = useAnimatedNumber(
+    dailyReports.reduce((sum, d) => sum + d.totalTransactions, 0)
+  );
+  const totalExpenses = useAnimatedNumber(
+    dailyReports.reduce((sum, d) => sum + d.totalExpenses, 0)
+  );
 
   const todayReport = dailyReports.find(report => 
     new Date(report.date).toDateString() === new Date().toDateString()
@@ -370,31 +485,53 @@ export const SalesReport = () => {
           <CardTitle>Recent Transactions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {transactions.length > 0 ? (
-              transactions.slice(0, 10).map((transaction) => (
-                <div 
-                  key={transaction.id} 
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => handleTransactionClick(transaction)}
-                >
-                  <div>
-                    <p className="font-medium">#{transaction.invoice_number}</p>
-                    <p className="text-sm text-gray-600">{new Date(transaction.created_at).toLocaleDateString()}</p>
-                    <p className="text-sm text-gray-600">Payment: {transaction.payment_method}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium text-green-600">₹{transaction.total_amount.toFixed(2)}</p>
-                    <Badge variant="outline" className="text-xs">
-                      {transaction.is_direct_billing ? 'Direct' : 'Regular'}
-                    </Badge>
-                  </div>
+          {transactions.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id} className="border-b">
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id} className="text-left p-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler?.()}>
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getIsSorted() ? (
+                            header.column.getIsSorted() === 'asc' ? ' ▲' : ' ▼'
+                          ) : null}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.map(row => (
+                    <tr key={row.id} className="border-b hover:bg-gray-50">
+                      {row.getVisibleCells().map(cell => (
+                        <td key={cell.id} className="p-2">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                    Previous
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                    Next
+                  </Button>
                 </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-center py-4">No transactions found</p>
-            )}
-          </div>
+                <span className="text-xs text-gray-600">
+                  Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-4">No transactions found</p>
+          )}
         </CardContent>
       </Card>
 
@@ -442,6 +579,62 @@ export const SalesReport = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Animated Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 shadow-lg">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Sales</p>
+              <motion.p initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }} className="text-2xl font-bold text-blue-700">
+                ₹{totalSales.toLocaleString()}
+              </motion.p>
+            </div>
+            <motion.div animate={{ rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
+              <TrendingUp className="h-8 w-8 text-blue-500" />
+            </motion.div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 shadow-lg">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Profit</p>
+              <motion.p initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }} className="text-2xl font-bold text-green-700">
+                ₹{totalProfit.toLocaleString()}
+              </motion.p>
+            </div>
+            <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
+              <DollarSign className="h-8 w-8 text-green-500" />
+            </motion.div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 shadow-lg">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Transactions</p>
+              <motion.p initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }} className="text-2xl font-bold text-purple-700">
+                {totalTransactions.toLocaleString()}
+              </motion.p>
+            </div>
+            <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2 }}>
+              <Store className="h-8 w-8 text-purple-500" />
+            </motion.div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-red-50 to-red-100 shadow-lg">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Expenses</p>
+              <motion.p initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.5 }} className="text-2xl font-bold text-red-700">
+                ₹{totalExpenses.toLocaleString()}
+              </motion.p>
+            </div>
+            <motion.div animate={{ y: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
+              <TrendingDown className="h-8 w-8 text-red-500" />
+            </motion.div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Monthly Summary */}
       <Card>

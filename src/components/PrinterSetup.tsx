@@ -320,6 +320,8 @@ export const PrinterSetup = () => {
         .update({ printer_settings: settingsToSave })
         .eq('id', selectedShop.id);
       if (error) throw error;
+      // Also update localStorage so POS uses the latest settings
+      localStorage.setItem(billStorageKey, JSON.stringify(settingsToSave));
       toast({ title: 'Saved', description: 'Bill print style saved for this shop!' });
     } catch (err) {
       // fallback to localStorage if Supabase fails

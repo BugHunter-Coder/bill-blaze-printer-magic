@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useShop } from '@/hooks/useShop';
 import { useToast } from '@/hooks/use-toast';
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, PieChart, Pie, Cell, BarChart } from 'recharts';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  flexRender,
+  ColumnDef,
+} from '@tanstack/react-table';
 
 interface CustomerData {
   totalCustomers: number;
@@ -62,6 +70,63 @@ export const CustomerAnalytics = () => {
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState('30');
   const { toast } = useToast();
+
+  // TanStack Table setup for top customers
+  const [sorting, setSorting] = useState([]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageSize = 5;
+
+  const columns = useMemo<ColumnDef<any>[]>(
+    () => [
+      {
+        accessorKey: 'name',
+        header: 'Customer',
+        cell: info => info.getValue(),
+      },
+      {
+        accessorKey: 'totalSpent',
+        header: 'Total Spent',
+        cell: info => `₹${Number(info.getValue()).toFixed(2)}`,
+      },
+      {
+        accessorKey: 'orderCount',
+        header: 'Orders',
+        cell: info => info.getValue(),
+      },
+      {
+        accessorKey: 'lastOrder',
+        header: 'Last Order',
+        cell: info => {
+          const value = info.getValue();
+          return value ? new Date(value as string).toLocaleDateString() : '';
+        },
+      },
+    ],
+    []
+  );
+
+  const table = useReactTable({
+    data: customerData.topCustomers,
+    columns,
+    state: {
+      sorting,
+      pagination: { pageIndex, pageSize },
+    },
+    onSortingChange: setSorting,
+    onPaginationChange: updater => {
+      if (typeof updater === 'function') {
+        setPageIndex(updater({ pageIndex, pageSize }).pageIndex);
+      } else {
+        setPageIndex(updater.pageIndex);
+      }
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: false,
+    manualSorting: false,
+    pageCount: Math.ceil(customerData.topCustomers.length / pageSize),
+  });
 
   useEffect(() => {
     if (selectedShopId) {
@@ -316,35 +381,59 @@ export const CustomerAnalytics = () => {
         </Card>
       </div>
 
-      {/* Top Customers */}
-      <Card>
+      {/* Top Customers Table */}
+      <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Top Customers by Revenue</CardTitle>
+          <CardTitle>Top Customers</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {customerData.topCustomers.map((customer, index) => (
-              <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-blue-600">{index + 1}</span>
-                  </div>
-                  <div>
-                    <p className="font-medium">{customer.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {customer.orderCount} orders • Last order: {new Date(customer.lastOrder).toLocaleDateString()}
-                    </p>
-                  </div>
+          {customerData.topCustomers.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id} className="border-b">
+                      {headerGroup.headers.map(header => (
+                        <th key={header.id} className="text-left p-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler?.()}>
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getIsSorted() ? (
+                            header.column.getIsSorted() === 'asc' ? ' ▲' : ' ▼'
+                          ) : null}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.map(row => (
+                    <tr key={row.id} className="border-b hover:bg-gray-50">
+                      {row.getVisibleCells().map(cell => (
+                        <td key={cell.id} className="p-2">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                    Previous
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                    Next
+                  </Button>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-green-600">₹{customer.totalSpent.toFixed(2)}</p>
-                  <Badge variant="secondary" className="text-xs">
-                    {customer.orderCount} orders
-                  </Badge>
-                </div>
+                <span className="text-xs text-gray-600">
+                  Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                </span>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-center py-4">No top customers found</p>
+          )}
         </CardContent>
       </Card>
 

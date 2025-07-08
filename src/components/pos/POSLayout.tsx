@@ -21,7 +21,7 @@ export default function POSLayout() {
   const { selectedShop, loading: shopLoading } = useShop();
   const navigate = useNavigate();
   const isPageVisible = usePageVisibility();
-  const { toast } = useToast();
+  const { toast }: { toast: (args: { title: string; description?: string; variant?: 'default' | 'destructive' }) => void } = useToast();
   const [cartModalOpen, setCartModalOpen] = useState(false);
   
   const {
@@ -43,6 +43,9 @@ export default function POSLayout() {
   // Local state for printer device (can't be serialized)
   const [printerDevice, setPrinterDevice] = useState<BluetoothDevice | null>(null);
   const [testPrintLoading, setTestPrintLoading] = useState(false);
+
+  // State for customer details from Cart
+  const [customerDetails, setCustomerDetails] = useState<{ name: string; phone: string; email: string }>({ name: '', phone: '', email: '' });
 
   // Sync printerDevice with thermalPrinter singleton
   useEffect(() => {
@@ -163,7 +166,8 @@ export default function POSLayout() {
 
   const handleCheckoutComplete = async (
     method: 'cash' | 'card' | 'upi' | 'bank_transfer' | 'other',
-    directAmount?: number
+    directAmount?: number,
+    customerDetails?: { name: string; phone: string; email: string }
   ) => {
     try {
       console.log('🛒 Starting checkout process...', { cartLength: cart.length, method, directAmount });
@@ -174,6 +178,27 @@ export default function POSLayout() {
       const totalAmount = subtotal + taxAmount;
 
       console.log('🛒 Calculated amounts:', { subtotal, taxAmount, totalAmount });
+
+      // Upsert customer if details provided
+      let customerId: string | undefined = undefined;
+      if (customerDetails && (customerDetails.name || customerDetails.phone || customerDetails.email)) {
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .upsert({
+            shop_id: selectedShop.id,
+            name: customerDetails.name || 'Customer',
+            phone: customerDetails.phone || null,
+            email: customerDetails.email || null,
+            is_active: true,
+          }, { onConflict: 'shop_id,phone' })
+          .select()
+          .single();
+        if (customerError) {
+          toast({ title: 'Customer Save Failed', description: customerError.message, variant: 'destructive' });
+        } else {
+          customerId = customer.id;
+        }
+      }
 
       // Insert transaction
       const { data: transaction, error: transactionError } = await supabase
@@ -188,6 +213,7 @@ export default function POSLayout() {
           total_amount: totalAmount,
           payment_method: method,
           is_direct_billing: !!directAmount,
+          customer_id: customerId,
         })
         .select()
         .single();
@@ -251,7 +277,7 @@ export default function POSLayout() {
         console.log('🛒 Final cart state check:', { cartLength: cart.length });
       }, 100);
       
-      toast({ title: 'Order Completed', description: 'Payment processed and cart cleared!' });
+      toast({ title: 'Order Completed', description: 'Payment processed and cart cleared!', variant: 'default' });
     } catch (err: any) {
       console.error('❌ Checkout failed:', err);
       toast({ title: 'Order Failed', description: err.message || String(err), variant: 'destructive' });
@@ -341,7 +367,6 @@ export default function POSLayout() {
                 Cart ({cart.length} items)
               </DialogTitle>
             </DialogHeader>
-            
             <div className="flex-1 overflow-y-auto min-h-0 pb-24">
               <Cart
                 items={cart}
@@ -353,8 +378,9 @@ export default function POSLayout() {
                 compact={true}
                 onProceedToCheckout={() => {}}
                 singleClickMode={true}
-                onCompleteOrder={handleCheckoutComplete}
+                onCompleteOrder={(method, directAmount) => handleCheckoutComplete(method, directAmount, customerDetails)}
                 printerConnected={printerConnected}
+                onCustomerDetailsChange={setCustomerDetails}
               />
             </div>
           </DialogContent>

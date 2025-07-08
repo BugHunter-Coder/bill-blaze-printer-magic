@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/hooks/useShop';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +14,14 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Package, Edit, Trash2, Settings, Upload, Download, FileText, X } from 'lucide-react';
 import { DatabaseProduct } from '@/types/pos';
 import { ProductVariantsManager } from './ProductVariantsManager';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  flexRender,
+  ColumnDef,
+} from '@tanstack/react-table';
 
 interface Category {
   id: string;
@@ -55,6 +63,86 @@ export const ProductManagement = () => {
   });
 
   const [tempProductId, setTempProductId] = useState<string | null>(null);
+
+  // TanStack Table setup for products
+  const [sorting, setSorting] = useState([]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageSize = 10;
+
+  const columns = useMemo<ColumnDef<DatabaseProduct>[]>(
+    () => [
+      {
+        accessorKey: 'name',
+        header: 'Product Name',
+        cell: info => info.getValue(),
+      },
+      {
+        accessorKey: 'price',
+        header: 'Price',
+        cell: info => `₹${Number(info.getValue()).toFixed(2)}`,
+      },
+      {
+        accessorKey: 'stock_quantity',
+        header: 'Stock',
+        cell: info => info.getValue(),
+      },
+      {
+        accessorKey: 'category_id',
+        header: 'Category',
+        cell: info => {
+          const cat = categories.find(c => c.id === info.getValue());
+          return cat ? cat.name : '—';
+        },
+      },
+      {
+        accessorKey: 'has_variants',
+        header: 'Variants',
+        cell: info => (
+          <Badge variant={info.getValue() ? 'default' : 'secondary'} className="text-xs">
+            {info.getValue() ? 'Yes' : 'No'}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Actions',
+        cell: ({ row }) => (
+          <div className="flex space-x-1">
+            <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => handleEdit(row.original)}>
+              <Edit className="h-3 w-3" />
+            </Button>
+            <Button size="sm" variant="destructive" className="h-6 w-6 p-0" onClick={() => handleDelete(row.original.id)}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [categories]
+  );
+
+  const table = useReactTable({
+    data: products,
+    columns,
+    state: {
+      sorting,
+      pagination: { pageIndex, pageSize },
+    },
+    onSortingChange: setSorting,
+    onPaginationChange: updater => {
+      if (typeof updater === 'function') {
+        setPageIndex(updater({ pageIndex, pageSize }).pageIndex);
+      } else {
+        setPageIndex(updater.pageIndex);
+      }
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: false,
+    manualSorting: false,
+    pageCount: Math.ceil(products.length / pageSize),
+  });
 
   useEffect(() => {
     if (selectedShopId) {
@@ -955,138 +1043,61 @@ export const ProductManagement = () => {
             </div>
           )}
 
-          {/* Products Grid */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Your Products ({products.length})
-              </h2>
-              <div className="flex items-center space-x-2">
-                <Badge variant="outline" className="text-sm">
-                  {products.filter(p => p.stock_quantity <= p.min_stock_level).length} Low Stock
-                </Badge>
-              </div>
-            </div>
-
-            {products.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {products.map((product) => (
-                  <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-200">
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-lg text-gray-900 truncate">{product.name}</h3>
-                          {product.sku && (
-                            <p className="text-sm text-gray-500 mt-1">SKU: {product.sku}</p>
-                          )}
-                          {product.categories && (
-                            <div className="flex items-center space-x-1 mt-1">
-                              <span className="text-sm text-gray-500">Category:</span>
-                              <Badge variant="outline" className="text-xs">
-                                <span className="mr-1">{product.categories.icon || '📁'}</span>
-                                {product.categories.name}
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex space-x-1 ml-2">
-                          {product.has_variants && (
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => setSelectedProductForVariants(product.id)}
-                              title="Manage Variants"
-                              className="h-8 w-8 p-0"
-                            >
-                              <Settings className="h-3 w-3" />
-                            </Button>
-                          )}
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => handleEdit(product)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => handleDelete(product.id)}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      
-                      {product.description && (
-                        <p className="text-sm text-gray-600 mb-4 line-clamp-2">{product.description}</p>
-                      )}
-                      
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Price:</span>
-                          <span className="font-bold text-lg text-gray-900">₹{product.price.toFixed(2)}</span>
-                        </div>
-                        
-                        {product.cost_price && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Cost:</span>
-                            <span className="text-sm text-gray-700">₹{product.cost_price.toFixed(2)}</span>
-                          </div>
-                        )}
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Stock:</span>
-                          <Badge 
-                            variant={product.stock_quantity > product.min_stock_level ? "default" : "destructive"}
-                            className="text-xs"
-                          >
-                            {product.stock_quantity} units
-                          </Badge>
-                        </div>
-                        
-                        {product.has_variants && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Type:</span>
-                            <Badge variant="secondary" className="text-xs">Has Options</Badge>
-                          </div>
-                        )}
-                      </div>
+          {/* Product Table */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Products</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {products.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      {table.getHeaderGroups().map(headerGroup => (
+                        <tr key={headerGroup.id} className="border-b">
+                          {headerGroup.headers.map(header => (
+                            <th key={header.id} className="text-left p-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler?.()}>
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {header.column.getIsSorted() ? (
+                                header.column.getIsSorted() === 'asc' ? ' ▲' : ' ▼'
+                              ) : null}
+                            </th>
+                          ))}
+                        </tr>
+                      ))}
+                    </thead>
+                    <tbody>
+                      {table.getRowModel().rows.map(row => (
+                        <tr key={row.id} className="border-b hover:bg-gray-50">
+                          {row.getVisibleCells().map(cell => (
+                            <td key={cell.id} className="p-2">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {/* Pagination Controls */}
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+                        Previous
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+                        Next
+                      </Button>
                     </div>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16 bg-white rounded-xl shadow-sm border border-gray-200">
-                <div className="bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                  <Package className="h-8 w-8 text-gray-400" />
+                    <span className="text-xs text-gray-600">
+                      Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                    </span>
+                  </div>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No products yet</h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  Start building your product catalog by adding your first product. You can add basic products or products with multiple options.
-                </p>
-                <div className="flex items-center justify-center space-x-3">
-                  <Button 
-                    onClick={() => setShowCSVUpload(true)}
-                    variant="outline"
-                    className="border-green-600 text-green-600 hover:bg-green-50"
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Bulk Upload
-                  </Button>
-                  <Button 
-                    onClick={() => setShowAddForm(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3"
-                  >
-                    <Plus className="h-5 w-5 mr-2" />
-                    Add Your First Product
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                <p className="text-gray-500 text-center py-4">No products found</p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

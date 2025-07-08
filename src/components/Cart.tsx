@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CartItem, ShopDetails } from '@/types/pos';
 import { Package } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SingleClickPayment } from './pos/SingleClickPayment';
 
 interface CartProps {
@@ -22,12 +22,22 @@ interface CartProps {
     directAmount?: number
   ) => Promise<void>;
   printerConnected?: boolean;
+  onCustomerDetailsChange?: (details: { name: string; phone: string; email: string }) => void;
 }
 
-export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails, compact = false, onProceedToCheckout, singleClickMode = false, onCompleteOrder, printerConnected = false }: CartProps) => {
+export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total, shopDetails, compact = false, onProceedToCheckout, singleClickMode = false, onCompleteOrder, printerConnected = false, onCustomerDetailsChange }: CartProps) => {
   const tax = total * shopDetails.tax_rate;
   const finalTotal = total + tax;
   const [showSummaryDetails, setShowSummaryDetails] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+
+  useEffect(() => {
+    if (onCustomerDetailsChange) {
+      onCustomerDetailsChange({ name: customerName, phone: customerPhone, email: customerEmail });
+    }
+  }, [customerName, customerPhone, customerEmail, onCustomerDetailsChange]);
 
   // Debug logging
   console.log('Cart render - items:', items.map(item => ({
@@ -301,6 +311,49 @@ export const Cart = ({ items, onUpdateQuantity, onRemoveItem, onClearCart, total
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+            {/* Customer Details Section */}
+            <div className="mb-6 border-b pb-4">
+              <div className="font-semibold mb-1">Customer (optional)</div>
+              <input
+                type="text"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
+                placeholder="Customer Name"
+                className="w-full p-2 border border-gray-300 rounded text-sm mb-1"
+                maxLength={64}
+              />
+              <input
+                type="tel"
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value)}
+                placeholder="Phone"
+                className="w-full p-2 border border-gray-300 rounded text-sm mb-1"
+                maxLength={16}
+              />
+              <input
+                type="email"
+                value={customerEmail}
+                onChange={e => setCustomerEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full p-2 border border-gray-300 rounded text-sm"
+                maxLength={64}
+              />
+            </div>
+            {/* Cart Summary */}
+            <div className="mt-4 border-t pt-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold text-gray-900">Subtotal</span>
+                <span className="font-bold text-gray-900">₹{total.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-gray-700">Tax ({(shopDetails.tax_rate * 100).toFixed(0)}%)</span>
+                <span className="font-medium text-gray-700">₹{tax.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-lg font-bold border-t pt-2 mt-2">
+                <span className="text-green-700">Total</span>
+                <span className="text-green-700">₹{finalTotal.toFixed(2)}</span>
               </div>
             </div>
           </>

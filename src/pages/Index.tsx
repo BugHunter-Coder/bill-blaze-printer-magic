@@ -64,6 +64,7 @@ import { SubscriptionApplication } from '@/components/SubscriptionApplication';
 import { MobileSubscriptionCard } from '@/components/MobileSubscriptionCard';
 import { Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line, Legend, BarChart, LineChart as RechartsLineChart, Area, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { TransactionManager } from '@/components/admin/TransactionManager';
 
 interface DashboardStats {
   todayOrders: number;
@@ -99,7 +100,7 @@ interface PerformanceMetric {
 
 const Index = () => {
   const { user, profile, loading } = useAuth();
-  const { selectedShop, refreshShops } = useShop();
+  const { selectedShop, refreshShops, shops } = useShop();
   const [stats, setStats] = useState<DashboardStats>({
     todayOrders: 0,
     todaySales: 0,
@@ -979,6 +980,10 @@ const Index = () => {
             </Tabs>
           </div>
         </div>
+      </div>
+      {/* Transaction Table for Owners/Admins */}
+      <div className="mt-8">
+        <TransactionManager shops={shops} />
       </div>
     </div>
   );
