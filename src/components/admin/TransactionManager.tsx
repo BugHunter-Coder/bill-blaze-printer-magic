@@ -346,6 +346,7 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
                     <th className="text-left p-2">Payment</th>
                     <th className="text-left p-2">Status</th>
                     <th className="text-left p-2">Date</th>
+                    <th className="text-left p-2">Time</th>
                     <th className="text-left p-2">Customer</th>
                     <th className="text-left p-2">Actions</th>
                   </tr>
@@ -368,6 +369,9 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
                       </td>
                       <td className="p-2 text-gray-600">
                         {new Date(tx.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="p-2 text-gray-600">
+                        {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </td>
                       <td className="p-2 text-gray-600">
                         {tx.customer_name || 'N/A'}
