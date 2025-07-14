@@ -26,6 +26,7 @@ interface BillingData {
     currency: string;
     next_billing_date: string;
     created_at: string;
+    subscription_tier?: string; // Added for plan filtering
   }>;
 }
 
@@ -34,6 +35,7 @@ const BillingManagement = () => {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterPlan, setFilterPlan] = useState('all');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -73,7 +75,8 @@ const BillingManagement = () => {
         amount: sub.amount || 0,
         currency: sub.currency || 'INR',
         next_billing_date: sub.next_billing_date || sub.created_at,
-        created_at: sub.created_at
+        created_at: sub.created_at,
+        subscription_tier: sub.subscription_tier // Assuming subscription_tier is stored in subscribers table
       }));
 
       // Calculate billing statistics
@@ -130,8 +133,9 @@ const BillingManagement = () => {
       sub.owner_email.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === 'all' || sub.subscription_status === filterStatus;
+    const matchesPlan = filterPlan === 'all' || (sub.subscription_status !== 'cancelled' && sub.subscription_tier === filterPlan);
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesPlan;
   }) || [];
 
   if (loading) {
@@ -219,7 +223,20 @@ const BillingManagement = () => {
               <CardTitle>All Subscriptions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col md:flex-row gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Select value={filterPlan} onValueChange={setFilterPlan}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Filter by Plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Plans</SelectItem>
+                      <SelectItem value="basic">Basic</SelectItem>
+                      <SelectItem value="premium">Premium</SelectItem>
+                      <SelectItem value="enterprise">Enterprise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="relative flex-1">
                   <Input
                     placeholder="Search by shop name or email..."
@@ -256,6 +273,7 @@ const BillingManagement = () => {
                           <h3 className="font-medium">{subscription.shop_name}</h3>
                           <p className="text-sm text-gray-500">{subscription.owner_email}</p>
                           <p className="text-xs text-gray-400">
+                            Plan: <span className="font-semibold capitalize">{subscription.subscription_tier || 'N/A'}</span><br />
                             Next billing: {new Date(subscription.next_billing_date).toLocaleDateString()}
                           </p>
                         </div>

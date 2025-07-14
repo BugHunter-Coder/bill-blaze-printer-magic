@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
 import React, { useState } from 'react';
+import { useLogout } from '@/components/LogoutContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,21 +27,7 @@ export const Layout = ({
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
-
-  const handleLogout = async () => {
-    try {
-      // Import supabase here to avoid circular dependency
-      const { supabase } = await import('@/integrations/supabase/client');
-      await supabase.auth.signOut();
-      window.location.href = '/auth';
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to logout: " + error.message,
-        variant: "destructive",
-      });
-    }
-  };
+  const { loggingOut, logout } = useLogout();
 
   const handleProfileUpdate = async (data: any) => {
     try {
@@ -67,7 +54,8 @@ export const Layout = ({
       <div className="flex-1 flex flex-col min-h-screen">
         <Header
           user={user}
-          onLogout={handleLogout}
+          onLogout={logout}
+          loggingOut={loggingOut}
           onProfileUpdate={handleProfileUpdate}
           showBackToLanding={showBackToLanding}
           onBackToLanding={handleBackToLanding}

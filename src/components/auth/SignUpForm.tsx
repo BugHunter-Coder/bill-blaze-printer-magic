@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Mail, Lock, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface SignUpFormProps {
   onSubmit: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
@@ -42,7 +43,12 @@ export const SignUpForm = ({ onSubmit, isLoading, setIsLoading }: SignUpFormProp
   };
 
   return (
-    <form onSubmit={handleSignUp} className="space-y-4">
+    <form onSubmit={handleSignUp} className="space-y-6">
+      <Alert className="mb-4">
+        <AlertDescription>
+          <strong>Note:</strong> Every new account must create a shop. To add staff, first create your shop, then invite staff from the dashboard.
+        </AlertDescription>
+      </Alert>
       <div className="space-y-2">
         <Label htmlFor="signup-name">Full Name</Label>
         <div className="relative">

@@ -6,17 +6,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, Mail, Phone, LogOut, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useLogout } from '@/components/LogoutContext';
 
 const ShopDeactivated = () => {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const { refreshShopAccess } = useShop();
   const navigate = useNavigate();
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleLogout = async () => {
-    await signOut();
-    window.location.href = '/auth';
-  };
+  const { loggingOut, logout } = useLogout();
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -75,12 +72,25 @@ const ShopDeactivated = () => {
 
           <div className="flex gap-2">
             <Button 
-              onClick={handleLogout} 
+              onClick={logout} 
               variant="outline" 
               className="flex-1"
+              disabled={loggingOut}
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
+              {loggingOut ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Logging out...
+                </span>
+              ) : (
+                <>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </>
+              )}
             </Button>
             <Button 
               onClick={handleRefresh} 

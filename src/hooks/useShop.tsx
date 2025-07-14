@@ -37,15 +37,14 @@ export const ShopProvider = ({ children }: { children: React.ReactNode }) => {
 
       console.log('Fetching shops for profile:', profile);
 
-      // Build or filter parts - include shops where user is owner OR where user's profile shop_id matches OR shop is active
+      // Build or filter parts - include shops where user is owner OR where user's profile shop_id matches
       const orParts = [`owner_id.eq.${profile.id}`];
       if (profile.shop_id) {
         orParts.push(`id.eq.${profile.shop_id}`);
       }
-      orParts.push('is_active.eq.true'); // Always include all active shops
       const orString = orParts.join(',');
 
-      // Fetch all shops the user has access to or are active
+      // Fetch only shops the user owns or is assigned to
       const { data: userShops, error } = await supabase
         .from('shops')
         .select('*')

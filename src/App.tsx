@@ -49,6 +49,12 @@ import AuthCallback from '@/components/auth/AuthCallback';
 import CustomerListPage from './pages/customers/list';
 import CustomerAnalyticsPage from './pages/customers/analytics';
 import LoyaltyProgramStartPage from './pages/customers/loyalty';
+import Support from './pages/Support';
+import TermsService from './pages/TermsService';
+import Policy from './pages/Policy';
+import RefundPolicy from './pages/RefundPolicy';
+import SubscriptionSuccess from './pages/SubscriptionSuccess';
+import SubscriptionFailure from './pages/SubscriptionFailure';
 
 const queryClient = new QueryClient();
 
@@ -76,9 +82,11 @@ const App = () => (
                 path="/shop-setup" 
                 element={
                   <ShopAccessGuard>
-                    <Layout>
-                      <ShopSetup />
-                    </Layout>
+                    <ShopSetupRedirect>
+                      <Layout>
+                        <ShopSetup />
+                      </Layout>
+                    </ShopSetupRedirect>
                   </ShopAccessGuard>
                 } 
               />
@@ -562,6 +570,8 @@ const App = () => (
                   </ProtectedRoute>
                 } 
               />
+              <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+              <Route path="/subscription/failure" element={<SubscriptionFailure />} />
               <Route 
                 path="/analytics/financial" 
                 element={
@@ -650,6 +660,12 @@ const App = () => (
 
               {/* Customer Loyalty Program Route */}
               <Route path="/customers/loyalty" element={<LoyaltyProgramStartPage />} />
+              
+              {/* Support Routes */}
+              <Route path="/support" element={<Support />} />
+              <Route path="/termsservice" element={<TermsService />} />
+              <Route path="/policy" element={<Policy />} />
+              <Route path="/refundpolicy" element={<RefundPolicy />} />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

@@ -27,6 +27,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useShop } from '@/hooks/useShop';
 import { useAuth } from '@/hooks/useAuth';
 import DirectBilling from './DirectBilling';
+import { useLogout } from '@/components/LogoutContext';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface POSHeaderProps {
   shopName: string;
@@ -54,6 +56,7 @@ export function POSHeader({
   const { selectedShop } = useShop();
   const { profile: cashier } = useAuth();
   const [showDirectBilling, setShowDirectBilling] = useState(false);
+  const { loggingOut, logout } = useLogout();
 
   useEffect(() => {
     // Check Bluetooth support
@@ -95,11 +98,6 @@ export function POSHeader({
       };
     }
   }, [printerDevice]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/auth';
-  };
 
   const connectToStoredPrinter = async () => {
     if (!storedPrinter || !bluetoothSupported) return;
@@ -306,125 +304,158 @@ export function POSHeader({
     }
   };
 
+  const showRestriction = selectedShop?.subscription?.status !== 'active';
+
   return (
-    <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <Store className="h-5 w-5 text-primary" />
-        <div>
-          <h1 className="font-semibold text-card-foreground">{shopName}</h1>
-          <p className="text-xs text-muted-foreground">Point of Sale</p>
-        </div>
+    <>
+      {/* Restriction Banner */}
+      {showRestriction && (
+        <Alert className="mb-4 border-red-200 bg-red-50 flex items-center justify-between">
+          <AlertDescription className="text-red-800">
+            <b>Your shop does not have an active subscription.</b> Some POS features are restricted. <Button size="sm" className="ml-2" onClick={() => navigate('/subscription')}>Subscribe Now</Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* Subscription Tier (always show, default to Free if none) */}
+      <div className="flex items-center space-x-2 mb-2">
+        <Badge variant={selectedShop?.subscription?.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+          {selectedShop?.subscription?.status || 'inactive'}
+        </Badge>
+        <span className="text-sm text-blue-700 font-medium">
+          Tier: {(selectedShop?.subscription?.tier || 'Free').charAt(0).toUpperCase() + (selectedShop?.subscription?.tier || 'Free').slice(1)}
+        </span>
       </div>
+      <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Store className="h-5 w-5 text-primary" />
+          <div>
+            <h1 className="font-semibold text-card-foreground">{shopName}</h1>
+            <p className="text-xs text-muted-foreground">Point of Sale</p>
+          </div>
+        </div>
 
-      <div className="flex items-center gap-3">
-        {/* Printer Management */}
-        <div className="flex items-center gap-2">
-          {/* Direct Billing Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDirectBilling(true)}
-            className="hidden sm:flex"
-          >
-            💵 Direct Billing
-          </Button>
-          <Button
-            variant={printerConnected ? "default" : "outline"}
-            size="sm"
-            onClick={handlePrinterAction}
-            disabled={isConnecting}
-            className="hidden sm:flex"
-          >
-            {printerConnected ? (
-              <BluetoothConnected className="h-4 w-4 mr-2" />
-            ) : (
-              <Bluetooth className="h-4 w-4 mr-2" />
-            )}
-            {isConnecting ? 'Connecting...' : storedPrinter ? storedPrinter.name : 'Setup Printer'}
-            <Badge 
-              variant={printerConnected ? "secondary" : "destructive"}
-              className="ml-2 text-xs"
+        <div className="flex items-center gap-3">
+          {/* Printer Management */}
+          <div className="flex items-center gap-2">
+            {/* Direct Billing Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDirectBilling(true)}
+              className="hidden sm:flex"
             >
-              {printerConnected ? 'ON' : 'OFF'}
-            </Badge>
-          </Button>
+              💵 Direct Billing
+            </Button>
+            <Button
+              variant={printerConnected ? "default" : "outline"}
+              size="sm"
+              onClick={handlePrinterAction}
+              disabled={isConnecting}
+              className="hidden sm:flex"
+            >
+              {printerConnected ? (
+                <BluetoothConnected className="h-4 w-4 mr-2" />
+              ) : (
+                <Bluetooth className="h-4 w-4 mr-2" />
+              )}
+              {isConnecting ? 'Connecting...' : storedPrinter ? storedPrinter.name : 'Setup Printer'}
+              <Badge 
+                variant={printerConnected ? "secondary" : "destructive"}
+                className="ml-2 text-xs"
+              >
+                {printerConnected ? 'ON' : 'OFF'}
+              </Badge>
+            </Button>
 
-          {/* Printer Management Dropdown */}
+            {/* Printer Management Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Printer className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {storedPrinter && (
+                  <DropdownMenuItem onClick={connectToStoredPrinter} disabled={isConnecting}>
+                    <BluetoothConnected className="h-4 w-4 mr-2" />
+                    Reconnect to {storedPrinter.name}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={setupNewPrinter} disabled={isConnecting}>
+                  <Bluetooth className="h-4 w-4 mr-2" />
+                  Setup New Printer
+                </DropdownMenuItem>
+                {storedPrinter && (
+                  <DropdownMenuItem onClick={clearStoredPrinterData} className="text-destructive">
+                    <Printer className="h-4 w-4 mr-2" />
+                    Clear Stored Printer
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={handleTestPrint} disabled={testPrintLoading || !printerConnected}>
+                  🖨️ {testPrintLoading ? 'Printing...' : 'Test Print'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <Printer className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="gap-2">
+                <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
+                  {user.email?.[0]?.toUpperCase()}
+                </div>
+                <span className="hidden sm:inline">{user.email}</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              {storedPrinter && (
-                <DropdownMenuItem onClick={connectToStoredPrinter} disabled={isConnecting}>
-                  <BluetoothConnected className="h-4 w-4 mr-2" />
-                  Reconnect to {storedPrinter.name}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={setupNewPrinter} disabled={isConnecting}>
-                <Bluetooth className="h-4 w-4 mr-2" />
-                Setup New Printer
+              <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                <Settings className="h-4 w-4 mr-2" />
+                Dashboard
               </DropdownMenuItem>
-              {storedPrinter && (
-                <DropdownMenuItem onClick={clearStoredPrinterData} className="text-destructive">
-                  <Printer className="h-4 w-4 mr-2" />
-                  Clear Stored Printer
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={handleTestPrint} disabled={testPrintLoading || !printerConnected}>
-                🖨️ {testPrintLoading ? 'Printing...' : 'Test Print'}
+              <DropdownMenuItem onClick={() => navigate('/subscription')}>
+                <CreditCard className="h-4 w-4 mr-2" />
+                Subscription
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-destructive" disabled={loggingOut}>
+                {loggingOut ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Logging out...
+                  </span>
+                ) : (
+                  <>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </>
+                )}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-2">
-              <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium">
-                {user.email?.[0]?.toUpperCase()}
-              </div>
-              <span className="hidden sm:inline">{user.email}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-              <Settings className="h-4 w-4 mr-2" />
-              Dashboard
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/subscription')}>
-              <CreditCard className="h-4 w-4 mr-2" />
-              Subscription
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Direct Billing Modal */}
-      <Dialog open={showDirectBilling} onOpenChange={setShowDirectBilling}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Direct Billing</DialogTitle>
-          </DialogHeader>
-          {selectedShop && cashier && (
-            <DirectBilling
-              title="Direct Billing"
-              amount={''}
-              shopDetails={selectedShop}
-              cashier={cashier}
-              printerConnected={printerConnected}
-              onComplete={() => setShowDirectBilling(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </header>
+        {/* Direct Billing Modal */}
+        <Dialog open={showDirectBilling} onOpenChange={setShowDirectBilling}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Direct Billing</DialogTitle>
+            </DialogHeader>
+            {selectedShop && cashier && (
+              <DirectBilling
+                title="Direct Billing"
+                amount={''}
+                shopDetails={selectedShop}
+                cashier={cashier}
+                printerConnected={printerConnected}
+                onComplete={() => setShowDirectBilling(false)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      </header>
+    </>
   );
 }

@@ -55,6 +55,7 @@ import {
   Signal
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useLogout } from '@/components/LogoutContext';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -77,6 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
   const { user, profile } = useAuth();
   const { selectedShop } = useShop();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const { loggingOut, logout } = useLogout();
 
   const toggleExpanded = (title: string) => {
     setExpandedItems(prev => 
@@ -321,11 +323,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
     }
   ];
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/auth';
-  };
-
   const renderNavItem = (item: NavItem, level: number = 0) => {
     const isExpanded = expandedItems.includes(item.title);
     const hasChildren = item.children && item.children.length > 0;
@@ -484,9 +481,21 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
                 <Settings className="h-3 w-3 mr-1" />
                 Settings
               </Button>
-              <Button variant="outline" size="sm" className="text-xs" onClick={handleLogout}>
-                <LogOut className="h-3 w-3 mr-1" />
-                Logout
+              <Button variant="outline" size="sm" className="text-xs" onClick={logout} disabled={loggingOut}>
+                {loggingOut ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Logging out...
+                  </span>
+                ) : (
+                  <>
+                    <LogOut className="h-3 w-3 mr-1" />
+                    Logout
+                  </>
+                )}
               </Button>
             </div>
 
@@ -501,8 +510,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
           </div>
         ) : (
           <div className="flex flex-col items-center space-y-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={logout} disabled={loggingOut}>
+              {loggingOut ? (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
             </Button>
           </div>
         )}

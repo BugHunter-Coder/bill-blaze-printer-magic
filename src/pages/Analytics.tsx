@@ -7,10 +7,18 @@ import { CustomerAnalytics } from '@/components/CustomerAnalytics';
 import { ProductAnalytics } from '@/components/ProductAnalytics';
 import { FinancialReports } from '@/components/FinancialReports';
 import { BarChart3, TrendingUp, Users, Package, DollarSign } from 'lucide-react';
+import { useShop } from '@/hooks/useShop';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 const Analytics = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('sales');
+  const { selectedShop } = useShop();
+  const navigate = useNavigate();
+  const subscription = selectedShop?.subscription;
+  const showRestriction = subscription?.status !== 'active';
 
   useEffect(() => {
     // Set active tab based on URL
@@ -26,7 +34,15 @@ const Analytics = () => {
   }, [location.pathname]);
 
   return (
-    <div className="overflow-y-auto bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Restriction Banner */}
+      {showRestriction && (
+        <Alert className="mb-6 border-red-200 bg-red-50 flex items-center justify-between">
+          <AlertDescription className="text-red-800">
+            <b>Your shop does not have an active subscription.</b> Analytics are restricted. <Button size="sm" className="ml-2" onClick={() => navigate('/subscription')}>Subscribe Now</Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Header */}

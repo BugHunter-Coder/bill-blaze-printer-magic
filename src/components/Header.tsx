@@ -33,6 +33,7 @@ interface HeaderProps {
   isPrinterConnected?: boolean;
   onPrinterConnectionChange?: (isConnected: boolean) => void;
   onPrinterChange?: (device: BluetoothDevice | null) => void;
+  loggingOut?: boolean;
 }
 /* ————————————————————————————————————————————— */
 
@@ -46,6 +47,7 @@ export default function Header({
   isPrinterConnected = false,
   onPrinterConnectionChange,
   onPrinterChange,
+  loggingOut = false,
 }: HeaderProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -169,6 +171,7 @@ export default function Header({
                 setDrawerOpen(false);
                 setEditOpen(true);
               }}
+              loggingOut={loggingOut}
             />
           </SheetContent>
         </Sheet>
@@ -183,7 +186,7 @@ export default function Header({
 /* ————————————————————————————————————————————— */
 /* Drawer body (extract to keep parent tidy)      */
 /* ————————————————————————————————————————————— */
-function DrawerBody({ user, navPath, go, onLogout, openEdit }) {
+function DrawerBody({ user, navPath, go, onLogout, openEdit, loggingOut }) {
   const { selectedShop } = useShop();
 
   return (
@@ -258,8 +261,20 @@ function DrawerBody({ user, navPath, go, onLogout, openEdit }) {
 
       {/* logout */}
       <div className="border-t bg-white p-6">
-        <Button variant="destructive" className="w-full" onClick={onLogout}>
-          <LogOut className="mr-2 h-4 w-4" /> Logout
+        <Button variant="destructive" className="w-full" onClick={onLogout} disabled={loggingOut}>
+          {loggingOut ? (
+            <span className="flex items-center justify-center">
+              <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              Logging out...
+            </span>
+          ) : (
+            <>
+              <LogOut className="mr-2 h-4 w-4" /> Logout
+            </>
+          )}
         </Button>
       </div>
     </div>

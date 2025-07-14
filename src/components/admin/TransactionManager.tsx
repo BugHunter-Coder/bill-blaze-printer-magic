@@ -27,11 +27,12 @@ interface Transaction {
   shop_name: string;
   total_amount: number;
   payment_method: string;
-  status: string;
+  status?: string;
   created_at: string;
-  items: any[];
+  items?: any[];
   customer_name?: string;
   customer_phone?: string;
+  // Add any other fields that may be present in the DB but not always returned
 }
 
 export const TransactionManager = ({ shops }: TransactionManagerProps) => {
@@ -47,6 +48,8 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
   const [pinError, setPinError] = useState('');
   const [shopPinHash, setShopPinHash] = useState<string | null>(null);
   const [selectedShopId, setSelectedShopId] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const transactionsPerPage = 10;
 
   useEffect(() => {
     // Fetch the shop's sensitive_data_pin hash
@@ -89,10 +92,12 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
 
       if (error) throw error;
 
-      // Transform data to include shop name
+      // Transform data to include shop name and fill missing fields with defaults
       const transformedTransactions = (data || []).map(tx => ({
         ...tx,
-        shop_name: tx.shops?.name || 'Unknown Shop'
+        shop_name: tx.shops?.name || 'Unknown Shop',
+        status: tx.status || 'completed',
+        items: tx.items || [],
       }));
 
       setTransactions(transformedTransactions);
@@ -226,6 +231,18 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
 
   const totalRevenue = filteredTransactions.reduce((sum, tx) => sum + tx.total_amount, 0);
   const totalTransactions = filteredTransactions.length;
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredTransactions.length / transactionsPerPage);
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * transactionsPerPage,
+    currentPage * transactionsPerPage
+  );
+
+  // Reset to first page if filters change and current page is out of range
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(1);
+  }, [filteredTransactions.length, totalPages]);
 
   const handleMaskToggle = async (checked: boolean) => {
     if (!checked) {
@@ -414,7 +431,7 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTransactions.map((tx) => (
+                  {paginatedTransactions.map((tx) => (
                     <tr key={tx.id} className="border-b hover:bg-gray-50">
                       <td className="p-2 font-medium">{tx.shop_name}</td>
                       <td className="p-2 text-gray-600">{tx.id.slice(0, 8)}...</td>
@@ -451,6 +468,30 @@ export const TransactionManager = ({ shops }: TransactionManagerProps) => {
                   ))}
                 </tbody>
               </table>
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center mt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-8">

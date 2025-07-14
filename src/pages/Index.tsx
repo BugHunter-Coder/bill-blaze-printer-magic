@@ -69,6 +69,7 @@ import bcrypt from 'bcryptjs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useSensitiveMask } from '@/components/SensitiveMaskContext';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface DashboardStats {
   todayOrders: number;
@@ -100,6 +101,12 @@ interface PerformanceMetric {
   unit: string;
   trend: 'up' | 'down' | 'stable';
   percentage: number;
+}
+
+interface ShopSubscription {
+  status: 'active' | 'inactive' | 'trial' | 'expired';
+  tier: 'basic' | 'premium' | 'enterprise';
+  end: string | null;
 }
 
 const Index = () => {
@@ -142,6 +149,7 @@ const Index = () => {
   const [pinError, setPinError] = useState('');
   const [shopPinHash, setShopPinHash] = useState<string | null>(null);
   const { maskSensitive, setMaskSensitive } = useSensitiveMask();
+  const [subscription, setSubscription] = useState<ShopSubscription | null>(null);
 
   // Check if user should be redirected to admin panel - ONLY for system admins
   useEffect(() => {
@@ -183,6 +191,27 @@ const Index = () => {
     };
     fetchPin();
   }, [selectedShop]);
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      if (!selectedShop || !profile?.email) return;
+      const { data: subscriber } = await supabase
+        .from('subscribers')
+        .select('*')
+        .eq('email', profile.email)
+        .single();
+      if (subscriber) {
+        setSubscription({
+          status: subscriber.subscribed ? 'active' : 'inactive',
+          tier: (subscriber.subscription_tier as 'basic' | 'premium' | 'enterprise') || 'basic',
+          end: subscriber.subscription_end,
+        });
+      } else {
+        setSubscription(null);
+      }
+    };
+    fetchSubscription();
+  }, [selectedShop, profile?.email]);
 
   const fetchDashboardStats = async () => {
     if (!selectedShop) return;
@@ -408,6 +437,8 @@ const Index = () => {
     }
   };
 
+  const showRestriction = subscription?.status !== 'active';
+
   if (loading || loadingStats) {
     return (
       <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -478,6 +509,46 @@ const Index = () => {
         <Button variant="outline" size="sm" onClick={refreshShops}>
           Refresh Shops
         </Button>
+      </div>
+      {/* Restriction Banner */}
+      {showRestriction && (
+        <Alert className="mb-6 border-red-200 bg-red-50 flex items-center justify-between">
+          <AlertDescription className="text-red-800">
+            <b>Your shop does not have an active subscription.</b> Some features are restricted. <Button size="sm" className="ml-2" onClick={() => navigate('/subscription')}>Subscribe Now</Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* Subscription Card (always show, default to Free if none) */}
+      <div className="mb-6">
+        <Card className="border-0 shadow-md bg-gradient-to-r from-blue-50 to-blue-100">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base font-semibold text-blue-800 flex items-center">
+              <span className="mr-2">Subscription</span>
+              <Badge variant={subscription?.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                {subscription?.status || 'inactive'}
+              </Badge>
+            </CardTitle>
+            <div className="text-sm text-blue-700 font-medium">
+              Tier: {(subscription?.tier || 'Free').charAt(0).toUpperCase() + (subscription?.tier || 'Free').slice(1)}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-gray-700">
+                {subscription?.end ? (
+                  <>Expires on <span className="font-semibold">{new Date(subscription.end).toLocaleDateString()}</span></>
+                ) : (
+                  <>No expiry date set</>
+                )}
+              </div>
+              {subscription?.status !== 'active' && (
+                <div className="mt-2 sm:mt-0 text-sm text-red-600 font-medium">
+                  Your subscription is inactive. Please <Button size="sm" variant="link" onClick={() => navigate('/subscription')}>subscribe</Button> to access all features.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex">
         {/* Main content area */}
